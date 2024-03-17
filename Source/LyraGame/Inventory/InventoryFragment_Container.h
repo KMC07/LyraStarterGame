@@ -19,9 +19,6 @@ class UInventoryFragment_Container : public ULyraInventoryItemFragment
 	GENERATED_BODY()
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category=Equipment)
-	TObjectPtr<ULyraInventoryManagerComponent> Inventory;
-	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FText ContainerName = FText::FromString("Container");
 	
