@@ -1,0 +1,10 @@
+{
+	"BuildId": "27405482",
+	"Modules": 
+	{
+		"ALS": "UnrealEditor-ALS.dll",
+		"ALSCamera": "UnrealEditor-ALSCamera.dll",
+		"ALSEditor": "UnrealEditor-ALSEditor.dll",
+		"ALSExtras": "UnrealEditor-ALSExtras.dll"
+	}
+}
