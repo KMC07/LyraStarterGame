@@ -23,7 +23,9 @@ UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Message_RootSlotChanged, "Lyra.
 
 // inventory item tags
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Item_Count, "Lyra.Inventory.Item.Count");
-
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Item_Rotation, "Lyra.Inventory.Item.Rotation");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Item_RootSlotX, "Lyra.Inventory.Item.RootSlotX");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Item_RootSlotY, "Lyra.Inventory.Item.RootSlotY");
 
 //////////////////////////////////////////////////////////////////////
 // FInventoryEntry
@@ -662,7 +664,7 @@ TArray<FInventorySlotFound> ULyraInventoryManagerComponent::FindAvailableSlotsFo
             if (InventoryGrid[RowIndex][ColumnIndex].ItemInstance == nullptr)
             {
                 // Try placing the item with each rotation
-                for (int32 Rotation = 0; Rotation < 360; Rotation += 90)
+                for (int32 Rotation = 0; Rotation < InventoryIconFragment->AllowedRotations.Num(); Rotation += 90)
                 {
                     if (CanPlaceItemInEmptySlot(ItemDef, RootSlot, Rotation))
                     {

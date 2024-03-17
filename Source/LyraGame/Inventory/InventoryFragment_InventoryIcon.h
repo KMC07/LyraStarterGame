@@ -54,16 +54,25 @@ public:
 	}
 };
 
+UENUM(BlueprintType)
+enum class EItemRotation : uint8
+{
+	Rotation_0 UMETA(DisplayName = "0 Degrees"),
+	Rotation_90 UMETA(DisplayName = "90 Degrees"),
+	Rotation_180 UMETA(DisplayName = "180 Degrees"),
+	Rotation_270 UMETA(DisplayName = "270 Degrees")
+};
+
 UCLASS()
 class UInventoryFragment_InventoryIcon : public ULyraInventoryItemFragment
 {
 	GENERATED_BODY()
 
 public:
-	UInventoryFragment_InventoryIcon();
-
-	virtual void OnInstanceCreated(ULyraInventoryItemInstance* Instance) const override;
+	virtual void PostLoad() override;
 	
+	void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent);
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Appearance)
 	TObjectPtr<UTexture2D> InventoryIcon;
 
@@ -82,5 +91,17 @@ public:
 	UPROPERTY(EditAnywhere, Category=Item)
 	bool bCanBeDropped = true;
 
+public:
+	
+	TArray<EItemRotation> AllowedRotations;
+
+private:
+
+	void InitialiseAllowedRotations();
+	
+	// Function to calculate allowed rotations based on the item's shape
+	TArray<EItemRotation> CalculateAllowedRotations();
+
+	
 	
 };
