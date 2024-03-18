@@ -5,7 +5,7 @@
 #include "GameplayTagContainer.h"
 #include "LyraInventoryItemDefinition.h"
 
-#include "InventoryFragment_Container.generated.h"
+#include "InventoryFragment_Consumable.generated.h"
 
 class ULyraGameplayAbility;
 class ULyraInventoryManagerComponent;
