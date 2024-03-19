@@ -13,39 +13,69 @@ class UObject;
 struct FGameplayTag;
 struct FSpecificItemDefinition;
 
+// this payload is used to give items with this fragment their own internal inventory
+UCLASS()
+class UInventoryFragmentPayload_Container : public ULyraInventoryItemFragmentPayload
+{
+	GENERATED_BODY()
+
+public:
+
+	virtual void DestroyTransientFragment() override;
+	
+	TObjectPtr<ULyraInventoryManagerComponent> ChildInventory;
+};
+
 UCLASS()
 class UInventoryFragment_Container : public ULyraInventoryItemFragment
 {
 	GENERATED_BODY()
 
-protected:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FText ContainerName = FText::FromString("Container");
-	
-	UPROPERTY(EditAnywhere, Category = "Inventory")
-	TArray<ULyraInventoryItemDefinition*> AllowedItems;
-
-	UPROPERTY(EditAnywhere, Category = "Inventory")
-	TArray<ULyraInventoryItemDefinition*> DisallowedItems;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TArray<FSpecificItemDefinition> SpecificItemCountLimits;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bAllowContainerWindow = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bUseItemCountLimit = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float MaxWeight = 0;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	int32 ItemCountLimit = 0;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TArray<FSpecificItemDefinition> StartingItems;
+public:
+	virtual ULyraInventoryItemFragmentPayload* CreateNewTransientFragment() const override;
 
 public:
-	virtual void OnInstanceCreated(ULyraInventoryItemInstance* Instance) const override;
+	UPROPERTY(EditAnywhere)
+	FText ContainerName = FText::FromString("Container");
+
+	// Do not allow this to be empty (as this doesn't make sense in the context of items. Must have a value
+	UPROPERTY(Replicated)
+	TArray<FInventory2DSlot> InventoryGrid;
+	
+	// these are the itemn the inventory starts with
+	UPROPERTY(EditAnywhere)
+	TArray<FSpecificItemDefinition> StartingItems;
+	
+	// If set to 0 then this inventory will not take weight into account
+	UPROPERTY(EditAnywhere)
+	float MaxWeight = 10.0f;
+
+	// should this inventory ignore weights from child inventory and only take into account the child item's weight
+	UPROPERTY(EditAnywhere)
+	bool bIgnoreChildInventoryWeights = true;
+	
+	// if set to 0 then this inventory will not take item counts into account
+	UPROPERTY(EditAnywhere)
+	int32 ItemCountLimit = 10;
+
+	// should inventory ignore the number of item a child inventory has and treat the child as a single item
+	UPROPERTY(EditAnywhere)
+	bool bIgnoreChildInventoryItemCounts = true;
+
+	// if this is not empty, then only items in this array allowed in this inventory
+	UPROPERTY(EditAnywhere, Category=Inventory)
+	TSet<TSubclassOf<ULyraInventoryItemDefinition>> AllowedItems;
+
+	// if this is not empty, then items in this array are not allowed in this list
+	UPROPERTY(EditAnywhere, Category=Inventory)
+	TSet<TSubclassOf<ULyraInventoryItemDefinition>> DisallowedItems;
+
+	// this is the list of items and the max amount that can be in your inventory (NOTE DO NOT set an item to 0, instead add item to DisallowedItems)
+	UPROPERTY(EditAnywhere)
+	TArray<FSpecificItemDefinition> SpecificItemCountLimits;
+
+	// should inventory ignore the number of item a child inventory has when checking its specific item's limit count
+	UPROPERTY(EditAnywhere)
+	bool bIgnoreChildInventoryItemLimits = true;
+	
 };

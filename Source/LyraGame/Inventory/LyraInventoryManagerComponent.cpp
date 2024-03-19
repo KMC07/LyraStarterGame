@@ -2,6 +2,7 @@
 
 #include "LyraInventoryManagerComponent.h"
 
+#include "InventoryFragment_Container.h"
 #include "InventoryFragment_InventoryIcon.h"
 #include "Engine/ActorChannel.h"
 #include "Engine/World.h"
@@ -106,6 +107,14 @@ ULyraInventoryItemInstance* FInventoryList::AddEntry(TSubclassOf<ULyraInventoryI
 		if (Fragment != nullptr)
 		{
 			Fragment->OnInstanceCreated(NewEntry.Instance);
+
+			// get the transient data from the payload
+			ULyraInventoryItemFragmentPayload* TransientFragment = Fragment->CreateNewTransientFragment();
+			if(IsValid(TransientFragment))
+			{
+				// add the transient fragment to the item instance
+				NewEntry.Instance->TransientFragments.Add(Fragment->GetClass(), TransientFragment);
+			}
 		}
 	}
 	NewEntry.StackCount = StackCount;
@@ -168,6 +177,27 @@ ULyraInventoryManagerComponent::ULyraInventoryManagerComponent(const FObjectInit
 	SetIsReplicatedByDefault(true);
 }
 
+inline void ULyraInventoryManagerComponent::InitialiseInventoryComponent(const FText& InContainerName,
+	const TArray<FInventory2DSlot>& InInventoryGrid, const TArray<FSpecificItemDefinition>& InStartingItems,
+	float InMaxWeight, bool InIgnoreChildInventoryWeights, int32 InItemCountLimit,
+	bool InIgnoreChildInventoryItemCounts, const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InAllowedItems,
+	const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InDisallowedItems,
+	const TArray<FSpecificItemDefinition>& InSpecificItemCountLimits, bool InIgnoreChildInventoryItemLimits)
+{
+	// initialise the inventory with the proper config
+	ContainerName = InContainerName;
+	InventoryGrid = InInventoryGrid;
+	StartingItems = InStartingItems;
+	MaxWeight = InMaxWeight;
+	bIgnoreChildInventoryWeights = InIgnoreChildInventoryWeights;
+	ItemCountLimit = InItemCountLimit;
+	bIgnoreChildInventoryItemCounts = InIgnoreChildInventoryItemCounts;
+	AllowedItems = InAllowedItems;
+	DisallowedItems = InDisallowedItems;
+	SpecificItemCountLimits = InSpecificItemCountLimits;
+	bIgnoreChildInventoryItemLimits = InIgnoreChildInventoryItemLimits;
+}
+
 void ULyraInventoryManagerComponent::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -201,9 +231,9 @@ int32 ULyraInventoryManagerComponent::CanAddItemDefinition(TSubclassOf<ULyraInve
 
 	// Check if the item follows the specific item limit
 	int32 SpecificItemLimit = GetSpecificItemLimit(ItemDef);
-	if(SpecificItemLimit > -1)
+	int32 CurrentItemCount = GetTotalItemCountByDefinition(ItemDef, true);
+	if(SpecificItemLimit > 0)
 	{
-		int32 CurrentItemCount = GetTotalItemCountByDefinition(ItemDef);
 		if (SpecificItemLimit >= 0 && CurrentItemCount + StackCount > SpecificItemLimit)
 		{
 			AllowedAmount = FMath::Max(0, SpecificItemLimit - CurrentItemCount);
@@ -226,6 +256,12 @@ int32 ULyraInventoryManagerComponent::CanAddItemDefinition(TSubclassOf<ULyraInve
 		{
 			AllowedAmount = FMath::FloorToInt((MaxWeight - GetWeight()) / InventoryIconFragment->Weight);
 		}
+	}
+
+	// if there is a parent inventory, make sure adding to this inventory doesn't affect the parent inventory
+	if(ParentInventory)
+	{
+		ParentInventory->CanAddItemDefinitionInParent(ItemDef, AllowedAmount, IsValid(InventoryIconFragment), IsValid(InventoryIconFragment), CurrentItemCount);
 	}
 	
 	return AllowedAmount;
@@ -317,7 +353,7 @@ ULyraInventoryItemInstance* ULyraInventoryManagerComponent::FindFirstItemStackBy
 	return nullptr;
 }
 
-int32 ULyraInventoryManagerComponent::GetTotalItemCountByDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef) const
+int32 ULyraInventoryManagerComponent::GetTotalItemCountByDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, bool bCheckChildInventories) const
 {
 	int32 TotalCount = 0;
 	for (const FInventoryEntry& Entry : InventoryList.Entries)
@@ -329,6 +365,18 @@ int32 ULyraInventoryManagerComponent::GetTotalItemCountByDefinition(TSubclassOf<
 			if (Instance->GetItemDef() == ItemDef)
 			{
 				TotalCount += Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count);
+			}
+
+			// if this item has an inventory
+			if(bCheckChildInventories && Instance->FindFragmentByClass<UInventoryFragment_Container>())
+			{
+				// get the total item count in the child inventory
+				const UInventoryFragmentPayload_Container* ContainerTransient = Cast<UInventoryFragmentPayload_Container>(Instance->FindFragmentPayloadByClass(UInventoryFragment_Container::StaticClass()));
+				if(IsValid(ContainerTransient) && IsValid(ContainerTransient->ChildInventory))
+				{
+					
+					TotalCount += ContainerTransient->ChildInventory->GetTotalItemCountByDefinition(ItemDef, true);
+				}
 			}
 		}
 	}
@@ -381,8 +429,73 @@ int32 ULyraInventoryManagerComponent::GetSpecificItemLimit(TSubclassOf<ULyraInve
 	return 0;
 }
 
+int32 ULyraInventoryManagerComponent::CanAddItemDefinitionInParent(TSubclassOf<ULyraInventoryItemDefinition> ItemDef,
+	int32 StackCount, bool ItemWeightIncrease, bool ItemCountIncrease, int32 TotalSpecificItemCount)
+{
+	// this function will would be call from a child inventory (i.e this is a parent inventory)
+	ULyraInventoryItemDefinition* ItemDefinition = ItemDef.GetDefaultObject();
+	const UInventoryFragment_InventoryIcon* InventoryIconFragment = ItemDefinition->FindFragmentByClass<UInventoryFragment_InventoryIcon>();
+
+	// set the amount allowed from the child inventory
+	int32 AllowedAmount = StackCount;
+	
+	// We don't want to propagate inventory weight calculations any higher if this inventories weight did not change
+	const int32 CanItemWeightIncrease = bIgnoreChildInventoryWeights ? false : ItemWeightIncrease;
+	// Check the increase in weight in allowed in this inventory
+	if(CanItemWeightIncrease)
+	{
+		// check if adding this weight would exceed this inventory's weight limit
+		float TotalWeight = GetWeight() + (InventoryIconFragment->Weight * AllowedAmount);
+		if (MaxWeight > 0 && TotalWeight > MaxWeight)
+		{
+			// update the amount allowed to the parent inventory
+			AllowedAmount = FMath::FloorToInt((MaxWeight - GetWeight()) / InventoryIconFragment->Weight);
+		}
+	}
+
+	
+	// We don't want to propagate inventory item count calculations any higher if this inventories item count did not change
+	int32 CanItemCountIncrease = bIgnoreChildInventoryItemCounts ? false : ItemCountIncrease;
+	// Check the increase in item count in allowed in this inventory
+	if (CanItemCountIncrease)
+	{
+		// Check if adding the item would exceed the inventory item count limit
+		int32 TotalItems = GetItemCount() + AllowedAmount;
+		if (ItemCountLimit > 0 && TotalItems > ItemCountLimit)
+		{
+			// update the amount allowed to the parent inventory
+			AllowedAmount = FMath::Max(0, ItemCountLimit - GetItemCount());
+		}
+	}
+
+	int32 NewTotalItemSpecificCounts = TotalSpecificItemCount;
+	if (!bIgnoreChildInventoryItemLimits && TotalSpecificItemCount > 0)
+	{
+		// Check if adding the item would exceed the parent inventory's specific item count limits
+		// we do not want to check for child inventories as TotalSpecificItemCount already accounts for that
+		const int32 CurrentSpecificItemCount = GetTotalItemCountByDefinition(ItemDef, false);
+
+		// update the total item specific item counts for the parent inventory
+		NewTotalItemSpecificCounts += CurrentSpecificItemCount;
+		
+		int32 ParentItemLimit = GetSpecificItemLimit(ItemDef);
+		AllowedAmount = FMath::Min(AllowedAmount, ParentItemLimit - NewTotalItemSpecificCounts);
+	}
+
+	// stop traversing if there we cannot add an item, or there is no parent inventory
+	if (AllowedAmount > 0 && IsValid(ParentInventory))
+	{
+		AllowedAmount = ParentInventory->CanAddItemDefinitionInParent(ItemDef, AllowedAmount, CanItemWeightIncrease, CanItemCountIncrease, TotalSpecificItemCount);
+	}
+
+	// don't return negative values
+	AllowedAmount = AllowedAmount < 0 ? 0 : AllowedAmount;
+    
+	return AllowedAmount;
+}
+
 int32 ULyraInventoryManagerComponent::AddItem(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Amount,
-	TArray<ULyraInventoryItemInstance*>& OutStackedItems, TArray<ULyraInventoryItemInstance*>& OutNewItems)
+                                              TArray<ULyraInventoryItemInstance*>& OutStackedItems, TArray<ULyraInventoryItemInstance*>& OutNewItems)
 {
 	if (!IsValid(ItemDef) || Amount <= 0)
 		return Amount;
@@ -842,12 +955,35 @@ bool ULyraInventoryManagerComponent::SearchForItem(TSubclassOf<ULyraInventoryIte
 	return false;
 }
 
+void ULyraInventoryManagerComponent::DestroyContainingInventories()
+{
+	for (const FInventoryEntry& Entry : InventoryList.Entries)
+	{
+		ULyraInventoryItemInstance* Instance = Entry.Instance;
+		
+		if (IsValid(Instance))
+		{
+			// if this item has an inventory
+			if(Instance->FindFragmentByClass<UInventoryFragment_Container>())
+			{
+				// get the total item count in the child inventory
+				const UInventoryFragmentPayload_Container* ContainerTransient = Cast<UInventoryFragmentPayload_Container>(Instance->FindFragmentPayloadByClass(UInventoryFragment_Container::StaticClass()));
+				if(IsValid(ContainerTransient) && IsValid(ContainerTransient->ChildInventory))
+				{
+					// TODO Call the global manager and tell it to delete this inventories item inventories.
+				}
+			}
+		}
+	}
+}
 
 
 void ULyraInventoryManagerComponent::EmptyInventory()
 {
 	// loop through the inventory slots and reset all the instances
 
+	// destroy transient fragment data
+	
 	// reset the inventory list and remove child inventories
 
 	// reset the weight and item count back to 0
@@ -872,7 +1008,9 @@ void ULyraInventoryManagerComponent::RemoveItemCount(ULyraInventoryItemInstance*
 	
 	ItemInstance->RemoveStatTagStack(TAG_Lyra_Inventory_Item_Count, Amount);
 
-	// reduce the inventory weight and item count
+	// TODO reduce the inventory weight and item count
+
+	// TODO increase the inventory weight and item count for parent inventories
 }
 
 void ULyraInventoryManagerComponent::AddItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount)
@@ -882,7 +1020,9 @@ void ULyraInventoryManagerComponent::AddItemCount(ULyraInventoryItemInstance* It
 	
 	ItemInstance->AddStatTagStack(TAG_Lyra_Inventory_Item_Count, Amount);
 
-	// increase the inventory weight and item count
+	// TODO increase the inventory weight and item count
+
+	// TODO increase the inventory weight and item count for parent inventories
 }
 
 

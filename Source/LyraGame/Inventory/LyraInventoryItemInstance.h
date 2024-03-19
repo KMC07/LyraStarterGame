@@ -11,6 +11,7 @@ class FLifetimeProperty;
 
 class ULyraInventoryItemDefinition;
 class ULyraInventoryItemFragment;
+class ULyraInventoryManagerComponent;
 struct FFrame;
 struct FGameplayTag;
 
@@ -59,6 +60,9 @@ public:
 		return (ResultClass*)FindFragmentByClass(ResultClass::StaticClass());
 	}
 
+	UFUNCTION(BlueprintCallable, BlueprintPure=false)
+	ULyraInventoryItemFragmentPayload* FindFragmentPayloadByClass(TSubclassOf<ULyraInventoryItemFragment> FragmentClass);
+	
 private:
 #if UE_WITH_IRIS
 	/** Register all replication fragments */
@@ -66,12 +70,17 @@ private:
 #endif // UE_WITH_IRIS
 
 	void SetItemDef(TSubclassOf<ULyraInventoryItemDefinition> InDef);
-
+	
 	friend struct FInventoryList;
 
 private:
 	UPROPERTY(Replicated)
 	FGameplayTagStackContainer StatTags;
+
+	// TODO preform efficient TMap replication look at GAS or System/GameplayTagStack
+	// This contains the transient payload for fragments that require transient data
+	UPROPERTY()
+	TMap<TSubclassOf<ULyraInventoryItemFragment>, ULyraInventoryItemFragmentPayload*> TransientFragments;
 
 	// The item definition
 	UPROPERTY(Replicated)

@@ -138,6 +138,7 @@ struct TStructOpsTypeTraits<FInventoryList> : public TStructOpsTypeTraitsBase2<F
  * Manages an inventory
  */
 
+// TODO replace this. This struct is a duplicate of FPickupTemplate but don't want to cause circular dependancies
 USTRUCT(BlueprintType)
 struct FSpecificItemDefinition
 {
@@ -246,10 +247,11 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
 	ULyraInventoryItemInstance* AddItemDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount = 1);
-	
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
-	ULyraInventoryItemInstance* AddItemDefinitionToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount, const FIntPoint& RootSlot, int32 Rotation);
 
+	UFUNCTION(Category=Inventory)
+	ULyraInventoryItemInstance* AddItemDefinitionToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount,
+		const FIntPoint& RootSlot, int32 Rotation);
+	
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
 	void AddItemInstance(ULyraInventoryItemInstance* ItemInstance);
 
@@ -262,10 +264,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category=Inventory, BlueprintPure)
 	ULyraInventoryItemInstance* FindFirstItemStackByDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef) const;
 	
-	int32 GetTotalItemCountByDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef) const;
+	int32 GetTotalItemCountByDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, bool bCheckChildInventories) const;
 	bool ConsumeItemsByDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 NumToConsume);
 	int32 GetSpecificItemLimit(TSubclassOf<ULyraInventoryItemDefinition> ItemDef) const;
-
+	
 	UFUNCTION(BlueprintCallable, Category=Inventory)
 	UPARAM(DisplayName = "RemainingAmount") int32 AddItem(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Amount,
 		TArray<ULyraInventoryItemInstance*>& OutStackedItems, TArray<ULyraInventoryItemInstance*>& OutNewItems);
@@ -297,15 +299,30 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category=Inventory)
 	UPARAM(DisplayName = "FoundEnoughItems") bool SearchForItem(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Count, TArray<ULyraInventoryItemInstance*>& OutItemInstances);
+
+	UFUNCTION(BlueprintCallable, Category=Inventory)
+	void DestroyContainingInventories();
 	
 	UFUNCTION(BlueprintCallable, Category=Inventory)
 	void EmptyInventory();
+
+
+	// Initialiser
+	void InitialiseInventoryComponent(const FText& InContainerName, const TArray<FInventory2DSlot>& InInventoryGrid,
+		const TArray<FSpecificItemDefinition>& InStartingItems, float InMaxWeight, bool InIgnoreChildInventoryWeights,
+		int32 InItemCountLimit, bool InIgnoreChildInventoryItemCounts, const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InAllowedItems,
+		const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InDisallowedItems, const TArray<FSpecificItemDefinition>& InSpecificItemCountLimits,
+		bool InIgnoreChildInventoryItemLimits);
+
+	
 	
 	//~UObject interface
 	virtual bool ReplicateSubobjects(class UActorChannel* Channel, class FOutBunch* Bunch, FReplicationFlags* RepFlags) override;
 	virtual void ReadyForReplication() override;
 	//~End of UObject interface
 
+
+	
 	//-------------GETTER AND SETTER FUNCTIONS ------------//
 	UFUNCTION(BlueprintGetter)
 	float GetWeight() const { return Weight; }
@@ -328,46 +345,68 @@ private:
 
 	// this rotates a shape by 90 degrees
 	TArray<FItem2DShape> RotateShape90Degrees(const TArray<FItem2DShape>& Shape);
-	
-	
-private:
-	UPROPERTY(Replicated)
-	FInventoryList InventoryList;
+
+	// this function would almost always be called by a base inventory (no need to expose it)
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
+	int32 CanAddItemDefinitionInParent(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount = 1,
+		bool ItemWeightIncrease, bool ItemCountIncrease, int32 TotalSpecificItemCount);
+
+
+// these are the variables that determine the inventories function
+protected:
+	UPROPERTY(EditAnywhere)
+	FText ContainerName = FText::FromString("Container");
 
 	// Keep this as empty if there is no spatial awareness in the inventory (think of COD or Fortnite where inventory slot position doesn't matter)
 	UPROPERTY(Replicated)
 	TArray<FInventory2DSlot> InventoryGrid;
-
+	
+	// these are the itemn the inventory starts with
 	UPROPERTY(EditAnywhere)
-	FText ContainerName = FText::FromString("Container");
-
-	UPROPERTY(EditAnywhere, Category=Inventory)
-	TSet<TSubclassOf<ULyraInventoryItemDefinition>> AllowedItems;
-
-	UPROPERTY(EditAnywhere, Category=Inventory)
-	TSet<TSubclassOf<ULyraInventoryItemDefinition>> DisallowedItems;
-
-	// this is the list of items and the max amount that can be in your inventory (NOTE DO NOT set to 0, instead add item to DisallowedItems)
-	UPROPERTY(EditAnywhere)
-	TArray<FSpecificItemDefinition> SpecificItemCountLimits;
-
-	UPROPERTY(EditAnywhere)
-	bool bAllowContainerWindow = false;
-
+	TArray<FSpecificItemDefinition> StartingItems;
+	
 	// If set to 0 then this inventory will not take weight into account
 	UPROPERTY(EditAnywhere)
 	float MaxWeight = 10.0f;
 
+	// should this inventory ignore weights from child inventory and only take into account the child item's weight
+	UPROPERTY(EditAnywhere)
+	bool bIgnoreChildInventoryWeights = true;
+	
 	// if set to 0 then this inventory will not take item counts into account
 	UPROPERTY(EditAnywhere)
 	int32 ItemCountLimit = 10;
-	
-	UPROPERTY(EditAnywhere)
-	TArray<FSpecificItemDefinition> StartingItems;
 
+	// should inventory ignore the number of item a child inventory has and treat the child as a single item
+	UPROPERTY(EditAnywhere)
+	bool bIgnoreChildInventoryItemCounts = true;
+
+	// if this is not empty, then only items in this array allowed in this inventory
+	UPROPERTY(EditAnywhere, Category=Inventory)
+	TSet<TSubclassOf<ULyraInventoryItemDefinition>> AllowedItems;
+
+	// if this is not empty, then items in this array are not allowed in this list
+	UPROPERTY(EditAnywhere, Category=Inventory)
+	TSet<TSubclassOf<ULyraInventoryItemDefinition>> DisallowedItems;
+
+	// this is the list of items and the max amount that can be in your inventory (NOTE DO NOT set an item to 0, instead add item to DisallowedItems)
+	UPROPERTY(EditAnywhere)
+	TArray<FSpecificItemDefinition> SpecificItemCountLimits;
+
+	// should inventory ignore the number of item a child inventory has when checking its specific item's limit count
+	UPROPERTY(EditAnywhere)
+	bool bIgnoreChildInventoryItemLimits = true;
+	
+private:
+	UPROPERTY(Replicated)
+	FInventoryList InventoryList;
+	
 	UPROPERTY(Replicated)
 	float ItemCount;
 	
 	UPROPERTY(Replicated)
 	float Weight;
+
+	UPROPERTY(Replicated)
+	TObjectPtr<ULyraInventoryManagerComponent> ParentInventory;
 };

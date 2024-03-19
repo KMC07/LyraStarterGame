@@ -13,7 +13,7 @@ struct FFrame;
 
 //////////////////////////////////////////////////////////////////////
 
-// Represents a fragment of an item definition
+// Represents a fragment of an item definition (Only store static data)
 UCLASS(DefaultToInstanced, EditInlineNew, Abstract)
 class LYRAGAME_API ULyraInventoryItemFragment : public UObject
 {
@@ -21,9 +21,26 @@ class LYRAGAME_API ULyraInventoryItemFragment : public UObject
 
 public:
 	virtual void OnInstanceCreated(ULyraInventoryItemInstance* Instance) const {}
+	
+	virtual ULyraInventoryItemFragmentPayload* CreateNewTransientFragment() const { return nullptr; }
+};
+
+// This object is used to store transient data from a fragment
+UCLASS(DefaultToInstanced, Abstract)
+class ULyraInventoryItemFragmentPayload : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void SerializePayload(FArchive& Ar) {}
+
+	virtual void DeserializePayload(FArchive& Ar) {}
+
+	virtual void DestroyTransientFragment() {}
 };
 
 //////////////////////////////////////////////////////////////////////
+
 
 /**
  * ULyraInventoryItemDefinition

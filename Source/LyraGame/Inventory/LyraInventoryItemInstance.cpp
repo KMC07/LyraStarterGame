@@ -71,4 +71,12 @@ const ULyraInventoryItemFragment* ULyraInventoryItemInstance::FindFragmentByClas
 	return nullptr;
 }
 
-
+ULyraInventoryItemFragmentPayload* ULyraInventoryItemInstance::FindFragmentPayloadByClass(TSubclassOf<ULyraInventoryItemFragment> FragmentClass)
+{
+	if ((ItemDef != nullptr) && (FragmentClass != nullptr))
+	{
+		return TransientFragments.FindChecked(FragmentClass);
+	}
+	
+	return nullptr;
+}
