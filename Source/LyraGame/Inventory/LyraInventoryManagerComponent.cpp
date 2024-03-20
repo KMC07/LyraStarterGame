@@ -2,6 +2,7 @@
 
 #include "LyraInventoryManagerComponent.h"
 
+#include "GlobalInventoryManager.h"
 #include "InventoryFragment_Container.h"
 #include "InventoryFragment_InventoryIcon.h"
 #include "Engine/ActorChannel.h"
@@ -109,7 +110,7 @@ ULyraInventoryItemInstance* FInventoryList::AddEntry(TSubclassOf<ULyraInventoryI
 			Fragment->OnInstanceCreated(NewEntry.Instance);
 
 			// get the transient data from the payload
-			ULyraInventoryItemFragmentPayload* TransientFragment = Fragment->CreateNewTransientFragment();
+			ULyraInventoryItemFragmentPayload* TransientFragment = Fragment->CreateNewTransientFragment(OwnerComponent->GetOwner());
 			if(IsValid(TransientFragment))
 			{
 				// add the transient fragment to the item instance
@@ -273,7 +274,7 @@ ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinition(TS
 	if (ItemDef != nullptr)
 	{
 		Result = InventoryList.AddEntry(ItemDef, StackCount);
-		AddItemCount(Result, StackCount);
+		UpdateItemCount(Result, StackCount, true);
 		
 		if (IsUsingRegisteredSubObjectList() && IsReadyForReplication() && Result)
 		{
@@ -291,7 +292,7 @@ ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinitionToS
 	if (ItemDef != nullptr)
 	{
 		Result = InventoryList.AddEntry(ItemDef, StackCount);
-		AddItemCount(Result, StackCount);
+		UpdateItemCount(Result, StackCount, true);
 
 		// add the slot variables to the item instance
 		Result->AddStatTagStack(TAG_Lyra_Inventory_Item_Rotation, Rotation);
@@ -310,7 +311,7 @@ ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinitionToS
 void ULyraInventoryManagerComponent::AddItemInstance(ULyraInventoryItemInstance* ItemInstance)
 {
 	InventoryList.AddEntry(ItemInstance);
-	AddItemCount(ItemInstance, ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count));
+	UpdateItemCount(ItemInstance, ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count), true);
 	if (IsUsingRegisteredSubObjectList() && IsReadyForReplication() && ItemInstance)
 	{
 		AddReplicatedSubObject(ItemInstance);
@@ -321,7 +322,7 @@ void ULyraInventoryManagerComponent::AddItemInstance(ULyraInventoryItemInstance*
 void ULyraInventoryManagerComponent::RemoveItemInstance(ULyraInventoryItemInstance* ItemInstance)
 {
 	InventoryList.RemoveEntry(ItemInstance);
-	RemoveItemCount(ItemInstance, ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count));
+	UpdateItemCount(ItemInstance, ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count), false);
 
 	if (ItemInstance && IsUsingRegisteredSubObjectList())
 	{
@@ -518,7 +519,7 @@ int32 ULyraInventoryManagerComponent::AddItem(TSubclassOf<ULyraInventoryItemDefi
 			// This means the item does not interact with the inventory slots, so just add the item amount to this instance
 			if(!InventoryIconFragment)
 			{
-				AddItemCount(Entry.Instance, Amount);
+				UpdateItemCount(Entry.Instance, Amount, true);
 				OutStackedItems.Add(Entry.Instance);
 				RemainingAmount = 0;
 			}
@@ -625,7 +626,7 @@ void ULyraInventoryManagerComponent::RemoveItem(ULyraInventoryItemInstance* Item
 				else
 				{
 					// try subtract the amount contained in the inventory
-					RemoveItemCount(ItemInstance, Amount);
+					UpdateItemCount(ItemInstance, Amount, false);
 				}
 			}
 
@@ -674,7 +675,7 @@ int32 ULyraInventoryManagerComponent::AddItemToSlot(TSubclassOf<ULyraInventoryIt
 		AmountAllowed = FMath::Min(AmountAllowed, InventoryIconFragment->MaxStackSize - CurrentItemStacks);
 
 		// increment the item count
-		AddItemCount(ItemInstance, AmountAllowed);
+		UpdateItemCount(ItemInstance, AmountAllowed, true);
 	}
 	else
 	{
@@ -719,7 +720,7 @@ void ULyraInventoryManagerComponent::RemoveItemFromSlot(const FIntPoint& Invento
 	// only remove part of the item instance based on the number of stacks selected
 	else
 	{
-		RemoveItemCount(ItemInstance, Amount);
+		UpdateItemCount(ItemInstance, Amount, false);
 	}
 }
 
@@ -868,7 +869,7 @@ bool ULyraInventoryManagerComponent::SplitItemStack(ULyraInventoryItemInstance* 
 		return false;
 
 	// Update the original item instance's stack count
-	RemoveItemCount(ItemInstance, AmountToSplit);
+	UpdateItemCount(ItemInstance, AmountToSplit, false);
 	
 	// Create a new item and add that to the inventory
 	ULyraInventoryItemInstance* NewItemAdded = nullptr;
@@ -904,15 +905,15 @@ bool ULyraInventoryManagerComponent::CombineItemStack(ULyraInventoryItemInstance
 	if (NewStackCount > MaxStackSize)
 	{
 		// If the combined stack exceeds the max stack size, update the destination stack count to max
-		AddItemCount(DestinationInstance, MaxStackSize - DestinationStackCount);
+		UpdateItemCount(DestinationInstance, MaxStackSize - DestinationStackCount, true);
 
 		// Update the source stack count with the remaining amount
-		RemoveItemCount(SourceInstance, MaxStackSize - DestinationStackCount);
+		UpdateItemCount(SourceInstance, MaxStackSize - DestinationStackCount, false);
 	}
 	else
 	{
 		// If the combined stack fits within the max stack size, update the destination stack count
-		AddItemCount(DestinationInstance, SourceStackCount);
+		UpdateItemCount(DestinationInstance, SourceStackCount, true);
 
 		// Remove the source item instance from the inventory
 		FIntPoint RootSlot(SourceInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotX), SourceInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotY));
@@ -970,7 +971,12 @@ void ULyraInventoryManagerComponent::DestroyContainingInventories()
 				const UInventoryFragmentPayload_Container* ContainerTransient = Cast<UInventoryFragmentPayload_Container>(Instance->FindFragmentPayloadByClass(UInventoryFragment_Container::StaticClass()));
 				if(IsValid(ContainerTransient) && IsValid(ContainerTransient->ChildInventory))
 				{
-					// TODO Call the global manager and tell it to delete this inventories item inventories.
+					// Call the global manager and tell it to delete this item inventory.
+					UGlobalInventoryManager* InventoryManager = UGlobalInventoryManager::Get(GetWorld());
+					if (InventoryManager)
+					{
+						InventoryManager->DestroyItemInventory(ContainerTransient->ChildInventory);
+					}
 				}
 			}
 		}
@@ -1001,28 +1007,55 @@ bool ULyraInventoryManagerComponent::IsSlotOverlapping(const FIntPoint& Slot1, c
 	return Slot1.X == Slot2.X && Slot1.Y == Slot2.Y;
 }
 
-void ULyraInventoryManagerComponent::RemoveItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount)
+void ULyraInventoryManagerComponent::UpdateItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount, bool bAdd)
 {
-	if(!IsValid(ItemInstance))
-		return;
-	
-	ItemInstance->RemoveStatTagStack(TAG_Lyra_Inventory_Item_Count, Amount);
+	if (!IsValid(ItemInstance) || Amount == 0) return;
 
-	// TODO reduce the inventory weight and item count
+	ULyraInventoryItemDefinition* ItemDefinition = ItemInstance->GetItemDef().GetDefaultObject();
+	const UInventoryFragment_InventoryIcon* InventoryIconFragment = ItemDefinition->FindFragmentByClass<UInventoryFragment_InventoryIcon>();
+	if (!IsValid(InventoryIconFragment)) return;
 
-	// TODO increase the inventory weight and item count for parent inventories
-}
+	// Adjust the stat tag stack based on whether we're adding or removing
+	if (bAdd)
+	{
+		ItemInstance->AddStatTagStack(TAG_Lyra_Inventory_Item_Count, Amount);
+	}
+	else
+	{
+		ItemInstance->RemoveStatTagStack(TAG_Lyra_Inventory_Item_Count, Amount);
+		Amount = -Amount; // Make amount negative for removals
+	}
 
-void ULyraInventoryManagerComponent::AddItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount)
-{
-	if(!IsValid(ItemInstance))
-		return;
-	
-	ItemInstance->AddStatTagStack(TAG_Lyra_Inventory_Item_Count, Amount);
+	float ItemWeight = Amount * InventoryIconFragment->Weight;
 
-	// TODO increase the inventory weight and item count
+	// Update the current inventory's weight and item count
+	SetWeight(GetWeight() + ItemWeight);
+	SetItemCount(GetItemCount() + Amount);
 
-	// TODO increase the inventory weight and item count for parent inventories
+	// Propagate changes to parent inventories
+	for (ULyraInventoryManagerComponent* Current = ParentInventory; Current; Current = Current->ParentInventory)
+	{
+		if (!Current->bIgnoreChildInventoryWeights)
+		{
+			Current->SetWeight(Current->GetWeight() + ItemWeight);
+		}
+		else
+		{
+			ItemWeight = 0; // Stop weight propagation
+		}
+
+		if (!Current->bIgnoreChildInventoryItemCounts)
+		{
+			Current->SetItemCount(Current->GetItemCount() + Amount);
+		}
+		else
+		{
+			Amount = 0; // Stop item count propagation
+		}
+
+		// Break if both propagation have been stopped
+		if (ItemWeight == 0 && Amount == 0) break;
+	}
 }
 
 

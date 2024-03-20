@@ -3,39 +3,68 @@
 
 #include "Inventory/GlobalInventoryManager.h"
 
-#include "InventoryFragment_Container.h"
-#include "LyraInventoryItemInstance.h"
-#include "LyraInventoryManagerComponent.h"
 #include "Components/SceneComponent.h"
-#include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameplayMessageSubsystem.h"
+#include "InventoryFragment_Container.h"
+#include "LyraInventoryManagerComponent.h"
+#include "NativeGameplayTags.h"
+#include "GameFramework/GameStateBase.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GlobalInventoryManager)
 
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Global_Inventory_Message_Loaded, "Lyra.GlobalInventory.Message.Loaded");
+
 // Sets default values
-AGlobalInventoryManager::AGlobalInventoryManager()
+UGlobalInventoryManager::UGlobalInventoryManager()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	bAlwaysRelevant = true;
-	bReplicates = true;
-	NetPriority = 3.0f;
-
-	DefaultSceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("DefaultSceneRoot"));
-    RootComponent = DefaultSceneRoot;
+	SetIsReplicatedByDefault(true);
 
 }
 
-void AGlobalInventoryManager::BeginPlay()
+void UGlobalInventoryManager::BeginPlay()
 {
 	Super::BeginPlay();
+
+	InitializeGlobalInventory();
 }
 
-void AGlobalInventoryManager::InitializeGlobalInventory()
+void UGlobalInventoryManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// remove all inventories from the server
+	ClearContainerInventories();
+	
+	Super::EndPlay(EndPlayReason);
+}
+
+UGlobalInventoryManager* UGlobalInventoryManager::Get(const UObject* WorldContextObject)
+{
+	UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::Assert);
+	check(World);
+	
+	AGameStateBase* GameState = World->GetGameState<AGameStateBase>();
+	if (!GameState) return nullptr; // Ensure GameState exists
+
+	// Attempt to find the Global Inventory Manager component on the GameState
+	UGlobalInventoryManager* InventoryManager = GameState->FindComponentByClass<UGlobalInventoryManager>();
+	return InventoryManager; // This could be nullptr if the component is not found
+}
+
+void UGlobalInventoryManager::InitializeGlobalInventory()
 {
 	// TODO add saving and loading functionality here
+
+
+	// send a broadcast message that the global inventory has loaded
+	FGlobalInventoryLoadedMessage LoadedMessage;
+	LoadedMessage.GlobalInventoryManager = this;
+
+	UGameplayMessageSubsystem& MessageSystem = UGameplayMessageSubsystem::Get(GetWorld());
+	MessageSystem.BroadcastMessage(TAG_Lyra_Global_Inventory_Message_Loaded, LoadedMessage);
 }
 
-ULyraInventoryManagerComponent* AGlobalInventoryManager::CreateNewInventory(
-	UInventoryFragment_Container* ContainerFragment)
+ULyraInventoryManagerComponent* UGlobalInventoryManager::CreateNewInventory(
+	const UInventoryFragment_Container* ContainerFragment)
 {
 	if(!ContainerFragment)
 		return nullptr;
@@ -64,7 +93,7 @@ ULyraInventoryManagerComponent* AGlobalInventoryManager::CreateNewInventory(
 	return NewInventoryManager;
 }
 
-void AGlobalInventoryManager::DestroyItemInventory(ULyraInventoryManagerComponent* InventoryManagerComponent)
+void UGlobalInventoryManager::DestroyItemInventory(ULyraInventoryManagerComponent* InventoryManagerComponent)
 {
 	if(InventoryManagerComponent)
 	{
@@ -77,7 +106,7 @@ void AGlobalInventoryManager::DestroyItemInventory(ULyraInventoryManagerComponen
 	}
 }
 
-void AGlobalInventoryManager::ClearContainerInventories()
+void UGlobalInventoryManager::ClearContainerInventories()
 {
 	for(auto& ContainerInventory : ContainerInventories)
 	{

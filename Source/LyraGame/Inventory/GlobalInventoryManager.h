@@ -12,26 +12,44 @@ class ULyraInventoryManagerComponent;
 class ULyraInventoryItemDefinition;
 class ULyraInventoryItemInstance;
 
+USTRUCT(BlueprintType)
+struct FGlobalInventoryLoadedMessage
+{
+    GENERATED_BODY()
+
+public:
+    // reference to the Global Inventory Component if needed.
+	TObjectPtr<UGlobalInventoryManager> GlobalInventoryManager;
+};
+
+
 UCLASS(Blueprintable)
-class LYRAGAME_API AGlobalInventoryManager : public AActor
+class LYRAGAME_API UGlobalInventoryManager : public UActorComponent
 {
 	GENERATED_BODY()
 	
 public:	
 	// Sets default values for this actor's properties
-	AGlobalInventoryManager();
+	UGlobalInventoryManager();
 
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	static UGlobalInventoryManager* UGlobalInventoryManager::Get(const UObject* WorldContextObject);
+	
+	UFUNCTION(BlueprintCallable)
+	ULyraInventoryManagerComponent* CreateNewInventory(const UInventoryFragment_Container* ContainerFragment);
+
+	UFUNCTION(BlueprintCallable)
+	void DestroyItemInventory(ULyraInventoryManagerComponent* InventoryManagerComponent);
+	
+private:
 	UFUNCTION(BlueprintCallable)
 	void InitializeGlobalInventory();
-
-	UFUNCTION(BlueprintCallable)
-	ULyraInventoryManagerComponent* CreateNewInventory(UInventoryFragment_Container* ContainerFragment);
 	
 	UFUNCTION(BlueprintCallable)
 	void ClearContainerInventories();
 	
-	UFUNCTION(BlueprintCallable)
-    void DestroyItemInventory(ULyraInventoryManagerComponent* InventoryManagerComponent);
+	
 
 protected:
 	// Called when the game starts or when spawned
@@ -43,5 +61,4 @@ protected:
 	/** This will contain the list of inventories in the game  */
 	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, BlueprintReadWrite, Category="GlobalInventoryManager|Grid")
 	TArray<ULyraInventoryManagerComponent*> ContainerInventories;
-
 };

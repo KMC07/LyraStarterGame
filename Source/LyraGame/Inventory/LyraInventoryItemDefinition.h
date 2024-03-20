@@ -22,7 +22,7 @@ class LYRAGAME_API ULyraInventoryItemFragment : public UObject
 public:
 	virtual void OnInstanceCreated(ULyraInventoryItemInstance* Instance) const {}
 	
-	virtual ULyraInventoryItemFragmentPayload* CreateNewTransientFragment() const { return nullptr; }
+	virtual ULyraInventoryItemFragmentPayload* CreateNewTransientFragment(UObject* NewOwner) const { return nullptr; }
 };
 
 // This object is used to store transient data from a fragment
@@ -32,6 +32,10 @@ class ULyraInventoryItemFragmentPayload : public UObject
 	GENERATED_BODY()
 
 public:
+	// TODO decide if TMap is not worth the hassle then keep reference of fragment inside
+	// the Payload, so a for loop over a TArray can be used to find the fragment creator
+	// for specific fragment logic
+	
 	virtual void SerializePayload(FArchive& Ar) {}
 
 	virtual void DeserializePayload(FArchive& Ar) {}

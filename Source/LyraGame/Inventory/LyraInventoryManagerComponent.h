@@ -329,6 +329,18 @@ public:
 
 	UFUNCTION(BlueprintGetter)
 	float GetItemCount() const { return ItemCount; }
+
+	UFUNCTION(BlueprintSetter)
+	void SetWeight(float InWeight)
+	{
+		Weight = InWeight;
+	}
+
+	UFUNCTION(BlueprintSetter)
+	void SetItemCount(float InItemCount)
+	{
+		ItemCount = InItemCount;
+	}
 	
 private:
 
@@ -336,9 +348,7 @@ private:
 
 	bool IsSlotOverlapping(const FIntPoint& Slot1, const FIntPoint& Slot2);
 
-	void RemoveItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount);
-
-	void AddItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount);
+	void UpdateItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount, bool bAdd);
 	
 	// This rotates a shape to the desired degree out of select choices (0, 90, 180, 270)
 	TArray<FItem2DShape> RotateShape (const TArray<FItem2DShape>& Shape, uint16 Rotation);

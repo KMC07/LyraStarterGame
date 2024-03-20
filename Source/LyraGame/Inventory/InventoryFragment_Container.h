@@ -32,7 +32,7 @@ class UInventoryFragment_Container : public ULyraInventoryItemFragment
 	GENERATED_BODY()
 
 public:
-	virtual ULyraInventoryItemFragmentPayload* CreateNewTransientFragment() const override;
+	virtual ULyraInventoryItemFragmentPayload* CreateNewTransientFragment(UObject* NewOwner) const override;
 
 public:
 	UPROPERTY(EditAnywhere)

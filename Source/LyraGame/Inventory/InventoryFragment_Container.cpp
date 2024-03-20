@@ -2,6 +2,7 @@
 
 #include "InventoryFragment_Container.h"
 
+#include "GlobalInventoryManager.h"
 #include "LyraInventoryItemInstance.h"
 #include "LyraInventoryManagerComponent.h"
 
@@ -14,9 +15,14 @@ void UInventoryFragmentPayload_Container::DestroyTransientFragment()
 {
 	if(ChildInventory)
 	{
-		// TODO tell the global manager to delete this inventory
+		// tell the global manager to delete this inventory
+		UGlobalInventoryManager* InventoryManager = UGlobalInventoryManager::Get(GetWorld());
+		if (InventoryManager)
+		{
+			InventoryManager->DestroyItemInventory(ChildInventory);
+		}
 
-		// TODO remove the reference to the child inventory
+		// remove the reference to the child inventory
 		ChildInventory = nullptr;
 	}
 }
@@ -24,11 +30,22 @@ void UInventoryFragmentPayload_Container::DestroyTransientFragment()
 //////////////////////////////////////////////////////////////////////
 // Container Fragment 
 
-ULyraInventoryItemFragmentPayload* UInventoryFragment_Container::CreateNewTransientFragment() const
+ULyraInventoryItemFragmentPayload* UInventoryFragment_Container::CreateNewTransientFragment(UObject* NewOwner) const
 {
-	// TODO tell the global inventory manager to create a new inventory for me
-
-	// TODO return the inventory pointer
-	
+	// tell the global inventory manager to create a new inventory for me
+	UGlobalInventoryManager* InventoryManager = UGlobalInventoryManager::Get(GetWorld());
+	if (InventoryManager)
+	{
+		ULyraInventoryManagerComponent* NewInventory = InventoryManager->CreateNewInventory(this);
+		if(NewInventory)
+		{
+			UInventoryFragmentPayload_Container* ContainerPayload = NewObject<UInventoryFragmentPayload_Container>(NewOwner); 
+			if(ContainerPayload)
+			{
+				ContainerPayload->ChildInventory = NewInventory;
+				return ContainerPayload;
+			}
+		}
+	}
 	return nullptr;
 }
