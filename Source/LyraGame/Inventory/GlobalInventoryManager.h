@@ -3,11 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/GameStateComponent.h"
 #include "GameFramework/Actor.h"
 
 #include "GlobalInventoryManager.generated.h"
 
 class UInventoryFragment_Container;
+class ULyraExperienceDefinition;
 class ULyraInventoryManagerComponent;
 class ULyraInventoryItemDefinition;
 class ULyraInventoryItemInstance;
@@ -24,7 +26,7 @@ public:
 
 
 UCLASS(Blueprintable)
-class LYRAGAME_API UGlobalInventoryManager : public UActorComponent
+class LYRAGAME_API UGlobalInventoryManager : public UGameStateComponent
 {
 	GENERATED_BODY()
 	
@@ -32,8 +34,13 @@ public:
 	// Sets default values for this actor's properties
 	UGlobalInventoryManager();
 
+	//~UActorComponent interface
+	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-
+	//~End of UActorComponent interface
+	
+	void OnExperienceLoaded(const ULyraExperienceDefinition* Experience);
+	
 	static UGlobalInventoryManager* UGlobalInventoryManager::Get(const UObject* WorldContextObject);
 	
 	UFUNCTION(BlueprintCallable)

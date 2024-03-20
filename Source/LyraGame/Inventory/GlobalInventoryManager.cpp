@@ -9,6 +9,7 @@
 #include "LyraInventoryManagerComponent.h"
 #include "NativeGameplayTags.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameModes/LyraExperienceManagerComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GlobalInventoryManager)
 
@@ -26,7 +27,11 @@ void UGlobalInventoryManager::BeginPlay()
 {
 	Super::BeginPlay();
 
-	InitializeGlobalInventory();
+	// Listen for the experience load to complete
+	AGameStateBase* GameState = GetGameStateChecked<AGameStateBase>();
+	ULyraExperienceManagerComponent* ExperienceComponent = GameState->FindComponentByClass<ULyraExperienceManagerComponent>();
+	check(ExperienceComponent);
+	ExperienceComponent->CallOrRegister_OnExperienceLoaded_LowPriority(FOnLyraExperienceLoaded::FDelegate::CreateUObject(this, &ThisClass::OnExperienceLoaded));
 }
 
 void UGlobalInventoryManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -35,6 +40,11 @@ void UGlobalInventoryManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	ClearContainerInventories();
 	
 	Super::EndPlay(EndPlayReason);
+}
+
+void UGlobalInventoryManager::OnExperienceLoaded(const ULyraExperienceDefinition* Experience)
+{
+	InitializeGlobalInventory();
 }
 
 UGlobalInventoryManager* UGlobalInventoryManager::Get(const UObject* WorldContextObject)
