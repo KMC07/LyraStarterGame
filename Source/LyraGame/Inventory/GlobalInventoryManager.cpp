@@ -15,14 +15,6 @@
 
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Global_Inventory_Message_Loaded, "Lyra.GlobalInventory.Message.Loaded");
 
-// Sets default values
-UGlobalInventoryManager::UGlobalInventoryManager()
-{
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	SetIsReplicatedByDefault(true);
-
-}
-
 void UGlobalInventoryManager::BeginPlay()
 {
 	Super::BeginPlay();

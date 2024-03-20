@@ -30,10 +30,8 @@ class LYRAGAME_API UGlobalInventoryManager : public UGameStateComponent
 {
 	GENERATED_BODY()
 	
-public:	
-	// Sets default values for this actor's properties
-	UGlobalInventoryManager();
-
+public:
+	
 	//~UActorComponent interface
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -41,7 +39,7 @@ public:
 	
 	void OnExperienceLoaded(const ULyraExperienceDefinition* Experience);
 	
-	static UGlobalInventoryManager* UGlobalInventoryManager::Get(const UObject* WorldContextObject);
+	static UGlobalInventoryManager* Get(const UObject* WorldContextObject);
 	
 	UFUNCTION(BlueprintCallable)
 	ULyraInventoryManagerComponent* CreateNewInventory(const UInventoryFragment_Container* ContainerFragment);
@@ -59,9 +57,7 @@ private:
 	
 
 protected:
-	// Called when the game starts or when spawned
-	virtual void BeginPlay() override;
-
+	
 	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category="GlobalInventoryManager|Components")
 	USceneComponent* DefaultSceneRoot = nullptr;
 
