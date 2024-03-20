@@ -77,6 +77,6 @@ DerivedDataCache/*
 Plugins/Developer
 
 #ALS Plugin Content
-Plugins/ALS-Refactored-4.13/Binaries
-Plugins/ALS-Refactored-4.13/Build
-Plugins/ALS-Refactored-4.13/Intermediate
+Plugins/ALS-Refactored-4.13/Binaries/*
+Plugins/ALS-Refactored-4.13/Build/*
+Plugins/ALS-Refactored-4.13/Intermediate/*
