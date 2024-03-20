@@ -3,6 +3,7 @@
 #pragma once
 
 #include "GameplayTagContainer.h"
+#include "InventoryDataLibrary.h"
 #include "LyraInventoryItemDefinition.h"
 
 #include "InventoryFragment_Container.generated.h"
@@ -39,8 +40,8 @@ public:
 	FText ContainerName = FText::FromString("Container");
 
 	// Do not allow this to be empty (as this doesn't make sense in the context of items. Must have a value
-	UPROPERTY(Replicated)
-	TArray<FInventory2DSlot> InventoryGrid;
+	UPROPERTY(EditAnywhere)
+	TArray<F1DBooleanRow> InventoryGrid;
 	
 	// these are the itemn the inventory starts with
 	UPROPERTY(EditAnywhere)

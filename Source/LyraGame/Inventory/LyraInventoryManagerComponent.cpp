@@ -12,6 +12,7 @@
 #include "LyraInventoryItemInstance.h"
 #include "NativeGameplayTags.h"
 #include "Net/UnrealNetwork.h"
+#include "WorldPartition/WorldPartitionBuilder.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraInventoryManagerComponent)
 
@@ -19,15 +20,13 @@ class FLifetimeProperty;
 struct FReplicationFlags;
 
 // broadcast message tags
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Message_GridCellChanged, "Lyra.Inventory.Message.GridCellChanged");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Message_StackChanged, "Lyra.Inventory.Message.StackChanged");
-UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Message_RotationChanged, "Lyra.Inventory.Message.RotationChanged");
-UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Message_RootSlotChanged, "Lyra.Inventory.Message.RootSlotChanged");
 
 // inventory item tags
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Item_Count, "Lyra.Inventory.Item.Count");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Item_Rotation, "Lyra.Inventory.Item.Rotation");
-UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Item_RootSlotX, "Lyra.Inventory.Item.RootSlotX");
-UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Item_RootSlotY, "Lyra.Inventory.Item.RootSlotY");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Lyra_Inventory_Item_RootSlot, "Lyra.Inventory.Item.RootSlot");
 
 //////////////////////////////////////////////////////////////////////
 // FInventoryEntry
@@ -169,6 +168,160 @@ TArray<ULyraInventoryItemInstance*> FInventoryList::GetAllItems() const
 }
 
 //////////////////////////////////////////////////////////////////////
+// FGridCellInfo
+
+FString FGridCellInfo::GetDebugString() const
+{
+	const FString ItemInstanceName = ItemInstance != nullptr ? GetNameSafe(ItemInstance) : TEXT("None");
+	FString ItemDefName;
+	if (ItemInstance != nullptr && ItemInstance->GetItemDef() != nullptr)
+	{
+		ItemDefName = GetNameSafe(ItemInstance->GetItemDef());
+	}
+	else
+	{
+		ItemDefName = TEXT("None");
+	}
+
+	// Convert the rotation enum to a readable string. 
+	// This assumes you have a method or means to convert EItemRotation values to strings.
+	FString RotationStr;
+	switch (Rotation)
+	{
+	case EItemRotation::Rotation_0:
+		RotationStr = TEXT("0");
+		break;
+	case EItemRotation::Rotation_90:
+		RotationStr = TEXT("90");
+		break;
+	case EItemRotation::Rotation_180:
+		RotationStr = TEXT("180");
+		break;
+	case EItemRotation::Rotation_270:
+		RotationStr = TEXT("270");
+		break;
+	default:
+		RotationStr = TEXT("Unknown");
+		break;
+	}
+
+	// Construct and return the debug string
+	return FString::Printf(TEXT("Position: (%d, %d), Rotation: %s, Item: %s, Definition: %s"), 
+		Position.X, Position.Y, *RotationStr, *ItemInstanceName, *ItemDefName);
+}
+
+////////////////////////////////////////////////////////////////////////
+// FGridCellInfoList
+
+void FGridCellInfoList::PreReplicatedRemove(const TArrayView<int32> RemovedIndices, int32 FinalSize)
+{
+	
+}
+
+void FGridCellInfoList::PostReplicatedAdd(const TArrayView<int32> AddedIndices, int32 FinalSize)
+{
+	
+}
+
+void FGridCellInfoList::PostReplicatedChange(const TArrayView<int32> ChangedIndices, int32 FinalSize)
+{
+	for (int32 Index : ChangedIndices)
+	{
+		FGridCellInfo& GridCellInfo = GridCells[Index];
+		BroadcastGridCellInventoryChangedMessage(GridCellInfo, /*OldRotation=*/ GridCellInfo.LastObservedRotation, /*NewRotation=*/ GridCellInfo.Rotation);
+		GridCellInfo.LastObservedRotation = GridCellInfo.Rotation;
+	}
+}
+
+void FGridCellInfoList::UpdateCellPosition(int32 SlotIndex, const FIntPoint& NewPosition)
+{
+	if(GridCells.IsValidIndex(SlotIndex))
+	{
+		GridCells[SlotIndex].Position = NewPosition;
+		MarkItemDirty(GridCells[SlotIndex]);
+	}
+}
+
+void FGridCellInfoList::UpdateCellItemInstance(int32 SlotIndex, ULyraInventoryItemInstance* NewItemInstance)
+{
+	if(GridCells.IsValidIndex(SlotIndex))
+	{
+		GridCells[SlotIndex].ItemInstance = NewItemInstance;
+		MarkItemDirty(GridCells[SlotIndex]);
+	}
+}
+
+void FGridCellInfoList::PopulateInventoryGrid(const TArray<F1DBooleanRow>& GridShape)
+{
+	GridCells.Empty(); // Clear existing grid cells
+	GridCellIndexMap.Empty(); // Clear existing mapping
+
+	// Resize GridCellIndexMap to match GridShape size
+	GridCellIndexMap.SetNum(GridShape.Num());
+
+	for (int32 RowIndex = 0; RowIndex < GridShape.Num(); ++RowIndex)
+	{
+		const F1DBooleanRow& Row = GridShape[RowIndex];
+
+		// Ensure the integer row has the correct size
+		GridCellIndexMap[RowIndex].SetNum(Row.Num());
+
+		for (int32 ColIndex = 0; ColIndex < Row.Num(); ++ColIndex)
+		{
+			if (Row[ColIndex]) // If the cell is accessible
+			{
+				// Create and add a new FGridCellInfo for the accessible cell
+				FGridCellInfo NewCell(FIntPoint(ColIndex, RowIndex), nullptr);
+				const int32 NewCellIndex = GridCells.Add(NewCell);
+
+				// Update the GridCellIndexMap with the index of the new cell
+				GridCellIndexMap[RowIndex][ColIndex] = NewCellIndex;
+			}
+			else
+			{
+				// Mark the cell as invalid in the GridCellIndexMap
+				GridCellIndexMap[RowIndex][ColIndex] = -1;
+			}
+		}
+	}
+}
+
+void FGridCellInfoList::BroadcastGridCellInventoryChangedMessage(FGridCellInfo& Entry, const EItemRotation& OldRotation,
+	const EItemRotation& NewRotation)
+{
+	FGridCellInventoryChangedMessage Message;
+	Message.InventoryOwner = OwnerComponent;
+	Message.Instance = Entry.ItemInstance;
+	Message.NewRotation = NewRotation;
+	Message.OldRotation = OldRotation;
+
+	UGameplayMessageSubsystem& MessageSystem = UGameplayMessageSubsystem::Get(OwnerComponent->GetWorld());
+	MessageSystem.BroadcastMessage(TAG_Lyra_Inventory_Message_GridCellChanged, Message);
+}
+
+int32 FGridCellInfoList::FindGridCellFromCoords(const FIntPoint& SlotCoords)
+{
+	if(IsSlotAccessible(SlotCoords))
+	{
+		return GridCellIndexMap[SlotCoords.Y][SlotCoords.X];
+	}
+	return -1;
+}
+
+bool FGridCellInfoList::IsSlotAccessible(const FIntPoint& SlotCoords)
+{
+	const bool bSlotValid = SlotCoords.Y >= 0 && SlotCoords.Y < GridCellIndexMap.Num() && SlotCoords.X >= 0 && SlotCoords.X < GridCellIndexMap[SlotCoords.Y].Num();
+	if(bSlotValid)
+	{
+		// inaccessible cells do not reference any grid cell index hence -1
+		return GridCellIndexMap[SlotCoords.Y][SlotCoords.X] > -1; 
+	}
+
+	return false;
+}
+
+
+//////////////////////////////////////////////////////////////////////
 // ULyraInventoryManagerComponent
 
 ULyraInventoryManagerComponent::ULyraInventoryManagerComponent(const FObjectInitializer& ObjectInitializer)
@@ -179,7 +332,7 @@ ULyraInventoryManagerComponent::ULyraInventoryManagerComponent(const FObjectInit
 }
 
 inline void ULyraInventoryManagerComponent::InitialiseInventoryComponent(const FText& InContainerName,
-	const TArray<FInventory2DSlot>& InInventoryGrid, const TArray<FSpecificItemDefinition>& InStartingItems,
+	const TArray<F1DBooleanRow>& InInventoryGrid, const TArray<FSpecificItemDefinition>& InStartingItems,
 	float InMaxWeight, bool InIgnoreChildInventoryWeights, int32 InItemCountLimit,
 	bool InIgnoreChildInventoryItemCounts, const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InAllowedItems,
 	const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InDisallowedItems,
@@ -187,7 +340,7 @@ inline void ULyraInventoryManagerComponent::InitialiseInventoryComponent(const F
 {
 	// initialise the inventory with the proper config
 	ContainerName = InContainerName;
-	InventoryGrid = InInventoryGrid;
+	InventoryGrid.PopulateInventoryGrid(InInventoryGrid);
 	StartingItems = InStartingItems;
 	MaxWeight = InMaxWeight;
 	bIgnoreChildInventoryWeights = InIgnoreChildInventoryWeights;
@@ -204,6 +357,7 @@ void ULyraInventoryManagerComponent::GetLifetimeReplicatedProps(TArray< FLifetim
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(ThisClass, InventoryList);
+	DOREPLIFETIME(ThisClass, InventoryGrid);
 }
 
 int32 ULyraInventoryManagerComponent::CanAddItemDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount)
@@ -296,8 +450,11 @@ ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinitionToS
 
 		// add the slot variables to the item instance
 		Result->AddStatTagStack(TAG_Lyra_Inventory_Item_Rotation, Rotation);
-		Result->AddStatTagStack(TAG_Lyra_Inventory_Item_RootSlotX, RootSlot.X);
-		Result->AddStatTagStack(TAG_Lyra_Inventory_Item_RootSlotY, RootSlot.Y);
+		
+		const int32 RootSlotIndex = InventoryGrid.FindGridCellFromCoords(RootSlot);
+		Result->AddStatTagStack(TAG_Lyra_Inventory_Item_RootSlot, RootSlotIndex);
+
+		// TODO update the inventory slots so they know there is an item there 
 		
 		if (IsUsingRegisteredSubObjectList() && IsReadyForReplication() && Result)
 		{
@@ -441,7 +598,7 @@ int32 ULyraInventoryManagerComponent::CanAddItemDefinitionInParent(TSubclassOf<U
 	int32 AllowedAmount = StackCount;
 	
 	// We don't want to propagate inventory weight calculations any higher if this inventories weight did not change
-	const int32 CanItemWeightIncrease = bIgnoreChildInventoryWeights ? false : ItemWeightIncrease;
+	const bool CanItemWeightIncrease = bIgnoreChildInventoryWeights ? false : ItemWeightIncrease;
 	// Check the increase in weight in allowed in this inventory
 	if(CanItemWeightIncrease)
 	{
@@ -456,7 +613,7 @@ int32 ULyraInventoryManagerComponent::CanAddItemDefinitionInParent(TSubclassOf<U
 
 	
 	// We don't want to propagate inventory item count calculations any higher if this inventories item count did not change
-	int32 CanItemCountIncrease = bIgnoreChildInventoryItemCounts ? false : ItemCountIncrease;
+	const bool CanItemCountIncrease = bIgnoreChildInventoryItemCounts ? false : ItemCountIncrease;
 	// Check the increase in item count in allowed in this inventory
 	if (CanItemCountIncrease)
 	{
@@ -547,7 +704,7 @@ int32 ULyraInventoryManagerComponent::AddItem(TSubclassOf<ULyraInventoryItemDefi
 	}
 	
 	// this means this inventory uses a grid based system
-	if(InventoryGrid.Num() > 0)
+	if(InventoryGrid.GridCells.Num() > 0)
 	{
 		// Find available empty slots for the remaining amount
 		TArray<FInventorySlotFound> AvailableEmptySlots = FindAvailableSlotsForItem(ItemDef, RemainingAmount, false);
@@ -596,24 +753,23 @@ void ULyraInventoryManagerComponent::RemoveItem(ULyraInventoryItemInstance* Item
 {
 	if (!IsValid(ItemInstance) || Amount <= 0)
 		return;
+
+	const ULyraInventoryItemDefinition* ItemDefinition = ItemInstance->GetItemDef().GetDefaultObject();
+	const UInventoryFragment_InventoryIcon* InventoryIconFragment = ItemDefinition->FindFragmentByClass<UInventoryFragment_InventoryIcon>();
 	
 	for (FInventoryEntry& Entry : InventoryList.Entries)
 	{
 		if (Entry.Instance == ItemInstance)
 		{
-			int32 AmountToRemove = FMath::Min(Amount, Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count));
-
-			ULyraInventoryItemDefinition* ItemDefinition = ItemInstance->GetItemDef().GetDefaultObject();
-			const UInventoryFragment_InventoryIcon* InventoryIconFragment = ItemDefinition->FindFragmentByClass<UInventoryFragment_InventoryIcon>();
-
+			const int32 AmountToRemove = FMath::Min(Amount, Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count));
+			
 			// if this item interacts with the inventory slots so remove the item from the slot
 			if(InventoryIconFragment)
 			{
-				int32 RootSlotX = ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotX);
-				int32 RootSlotY = ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotY);
+				const int32 RootSlot = ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlot);
 
 				// we are going to remove this item from the slot
-				RemoveItemFromSlot(FIntPoint(RootSlotX, RootSlotY), AmountToRemove, bRemoveEntireStack);
+				RemoveItemFromSlot(RootSlot, AmountToRemove, bRemoveEntireStack);
 			}
 			// this items doesn't interact with the inventory slots so just remove its amount
 			else
@@ -662,7 +818,11 @@ int32 ULyraInventoryManagerComponent::AddItemToSlot(TSubclassOf<ULyraInventoryIt
 	AmountAllowed = FMath::Min(AmountAllowed, InventoryIconFragment->MaxStackSize);
 	
 	// Check empty slots in the inventory grid
-	ULyraInventoryItemInstance* ItemInstance = InventoryGrid[RootSlot.Y][RootSlot.X].ItemInstance;
+	const int32 GridCellIndex = InventoryGrid.FindGridCellFromCoords(RootSlot);
+	if(GridCellIndex == -1)
+		return 0;
+	
+	ULyraInventoryItemInstance* ItemInstance = InventoryGrid.GridCells[GridCellIndex].ItemInstance;
 	if (ItemInstance != nullptr)
 	{
 		// if the items are different don't add to the slot
@@ -687,11 +847,11 @@ int32 ULyraInventoryManagerComponent::AddItemToSlot(TSubclassOf<ULyraInventoryIt
 	return Amount - AmountAllowed;
 }
 
-void ULyraInventoryManagerComponent::RemoveItemFromSlot(const FIntPoint& InventorySlot, int32 Amount, bool bRemoveEntireStack)
+void ULyraInventoryManagerComponent::RemoveItemFromSlot(int32 GridCellIndex, int32 Amount, bool bRemoveEntireStack)
 {
 
 	// do nothing if there is no item in that slot
-	ULyraInventoryItemInstance* ItemInstance = InventoryGrid[InventorySlot.Y][InventorySlot.X].ItemInstance;
+	ULyraInventoryItemInstance* ItemInstance = InventoryGrid.GridCells[GridCellIndex].ItemInstance;
 	if(!IsValid(ItemInstance))
 		return;
 
@@ -702,7 +862,7 @@ void ULyraInventoryManagerComponent::RemoveItemFromSlot(const FIntPoint& Invento
 		return;
 	
 	// Get the root slot location of the item in the inventory
-	FIntPoint RootSlot(ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotX), ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotY));
+	const FIntPoint RootSlot(InventoryGrid.GridCells[GridCellIndex].Position);
 
 	// are we completely removing the item instance from the inventory
 	if(bRemoveEntireStack || Amount >= ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count))
@@ -711,7 +871,8 @@ void ULyraInventoryManagerComponent::RemoveItemFromSlot(const FIntPoint& Invento
 		// set the slots to empty
 		for (const FIntPoint& Slot : OccupiedSlots)
 		{
-			InventoryGrid[Slot.Y][Slot.X].ItemInstance = nullptr;
+			const int32 SlotIndex = InventoryGrid.FindGridCellFromCoords(Slot);
+			InventoryGrid.UpdateCellItemInstance(SlotIndex, nullptr);
 		}
 		
 		// remove the inventory instance from the inventory list
@@ -745,8 +906,10 @@ TArray<FInventorySlotFound> ULyraInventoryManagerComponent::FindAvailableSlotsFo
 			if (Entry.Instance->GetItemDef() == ItemDef)
 			{
 				// get the root slot of the item instance
-				FIntPoint RootSlot(Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotX), Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotY));
-
+				const int32 RootSlotIndex = Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlot);
+				// Get the root slot location of the item in the inventory
+				const FIntPoint RootSlot(InventoryGrid.GridCells[RootSlotIndex].Position);
+				
 				// check if there is avaiable stack space
 				int32 AvailableStackSpace = InventoryIconFragment->MaxStackSize - Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count);
 				int32 AmountToAdd = FMath::Min(RemainingAmount, AvailableStackSpace);
@@ -768,40 +931,37 @@ TArray<FInventorySlotFound> ULyraInventoryManagerComponent::FindAvailableSlotsFo
 	
 
 	// Check empty slots in the inventory grid
-    for (int32 RowIndex = 0; RowIndex < InventoryGrid.Num() && RemainingAmount > 0; ++RowIndex)
-    {
-        for (int32 ColumnIndex = 0; ColumnIndex < InventoryGrid[RowIndex].Num() && RemainingAmount > 0; ++ColumnIndex)
-        {
-            FIntPoint RootSlot(ColumnIndex, RowIndex);
+	for (const auto& GridCell : InventoryGrid.GridCells)
+	{
+		FIntPoint RootSlot(GridCell.Position);
 
-            // Check if the slot is empty
-            if (InventoryGrid[RowIndex][ColumnIndex].ItemInstance == nullptr)
-            {
-                // Try placing the item with each rotation
-                for (int32 Rotation = 0; Rotation < InventoryIconFragment->AllowedRotations.Num(); Rotation += 90)
-                {
-                    if (CanPlaceItemInEmptySlot(ItemDef, RootSlot, Rotation))
-                    {
-                        AvailableSlots.Add(FInventorySlotFound(RootSlot, Rotation));
-                        RemainingAmount--;
-                        break;
-                    }
-                }
-            }
-        }
-    }
+		// Check if the slot is empty
+		if (GridCell.ItemInstance == nullptr)
+		{
+			// Try placing the item with each rotation
+			for (int32 Rotation = 0; Rotation < InventoryIconFragment->AllowedRotations.Num(); Rotation += 90)
+			{
+				if (CanPlaceItemInEmptySlot(ItemDef, RootSlot, Rotation))
+				{
+					AvailableSlots.Add(FInventorySlotFound(RootSlot, Rotation));
+					RemainingAmount--;
+					break;
+				}
+			}
+		}
+	}
 
     return AvailableSlots;
 }
 
 
-TArray<FIntPoint> ULyraInventoryManagerComponent::FindSlotsFromShape(const FIntPoint& RootSlot, const TArray<FItem2DShape>& Shape,
+TArray<FIntPoint> ULyraInventoryManagerComponent::FindSlotsFromShape(const FIntPoint& RootSlot, const TArray<F1DBooleanRow>& Shape,
 	int32 Rotation)
 {
 	TArray<FIntPoint> OccupiedSlots;
 
 	// Rotate the shape based on the specified rotation
-	TArray<FItem2DShape> RotatedShape = RotateShape(Shape, Rotation);
+	TArray<F1DBooleanRow> RotatedShape = RotateShape(Shape, Rotation);
 
 	for (int32 i = 0; i < RotatedShape.Num(); ++i)
 	{
@@ -825,26 +985,29 @@ bool ULyraInventoryManagerComponent::CanPlaceItemInEmptySlot(TSubclassOf<ULyraIn
 		return false;
 
 	// there are no inventory grids in this inventory, meaning no spatial awareness is used 
-	if(InventoryGrid.Num() == 0)
+	if(InventoryGrid.GridCells.Num() == 0)
 		return true;
 	
 	ULyraInventoryItemDefinition* ItemDefinition = ItemDef.GetDefaultObject();
 	if(const UInventoryFragment_InventoryIcon* InventoryIconFragment = ItemDefinition->FindFragmentByClass<UInventoryFragment_InventoryIcon>())
 	{
-		TArray<FItem2DShape> ItemShape = InventoryIconFragment->Shape;
+		TArray<F1DBooleanRow> ItemShape = InventoryIconFragment->Shape;
 	
 		TArray<FIntPoint> OccupiedSlots = FindSlotsFromShape(RootSlot, ItemShape, Rotation);
 
 		for (const FIntPoint& Slot : OccupiedSlots)
 		{
 			// if the slots is not accessible
-			if (!IsValidSlot(Slot) || !InventoryGrid[Slot.Y][Slot.X].bIsAccessible)
-			{
+			if (!InventoryGrid.IsSlotAccessible(Slot))
 				return false;
-			}
 
 			// check if the slot is occupied
-			if(InventoryGrid[Slot.Y][Slot.X].ItemInstance != nullptr)
+			const int32 GridCellIndex = InventoryGrid.FindGridCellFromCoords(Slot);
+			if(GridCellIndex == -1)
+				return false;
+
+			// check if there is an item in the slot
+			if(InventoryGrid.GridCells[GridCellIndex].ItemInstance != nullptr)
 			{
 				return false;
 			}
@@ -916,7 +1079,7 @@ bool ULyraInventoryManagerComponent::CombineItemStack(ULyraInventoryItemInstance
 		UpdateItemCount(DestinationInstance, SourceStackCount, true);
 
 		// Remove the source item instance from the inventory
-		FIntPoint RootSlot(SourceInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotX), SourceInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlotY));
+		const int32 RootSlot = SourceInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlot);
 		RemoveItemFromSlot(RootSlot, 0, true);
 	}
 
@@ -996,12 +1159,6 @@ void ULyraInventoryManagerComponent::EmptyInventory()
 }
 
 
-bool ULyraInventoryManagerComponent::IsValidSlot(const FIntPoint& Slot)
-{
-	return Slot.Y >= 0 && Slot.Y < InventoryGrid.Num() && Slot.X >= 0 && Slot.X < InventoryGrid[Slot.Y].Num(); 
-}
-
-
 bool ULyraInventoryManagerComponent::IsSlotOverlapping(const FIntPoint& Slot1, const FIntPoint& Slot2)
 {
 	return Slot1.X == Slot2.X && Slot1.Y == Slot2.Y;
@@ -1059,9 +1216,9 @@ void ULyraInventoryManagerComponent::UpdateItemCount(ULyraInventoryItemInstance*
 }
 
 
-TArray<FItem2DShape> ULyraInventoryManagerComponent::RotateShape(const TArray<FItem2DShape>& Shape, uint16 Rotation)
+TArray<F1DBooleanRow> ULyraInventoryManagerComponent::RotateShape(const TArray<F1DBooleanRow>& Shape, uint16 Rotation)
 {
-	TArray<FItem2DShape> RotatedShape = Shape;
+	TArray<F1DBooleanRow> RotatedShape = Shape;
 
 	for (int32 i = 0; i < Rotation / 90; ++i)
 	{
@@ -1071,12 +1228,12 @@ TArray<FItem2DShape> ULyraInventoryManagerComponent::RotateShape(const TArray<FI
 	return RotatedShape;
 }
 
-TArray<FItem2DShape> ULyraInventoryManagerComponent::RotateShape90Degrees(const TArray<FItem2DShape>& Shape)
+TArray<F1DBooleanRow> ULyraInventoryManagerComponent::RotateShape90Degrees(const TArray<F1DBooleanRow>& Shape)
 {
 	int32 Rows = Shape.Num();
 	int32 Columns = Shape[0].Num();
 
-	TArray<FItem2DShape> RotatedShape;
+	TArray<F1DBooleanRow> RotatedShape;
 	RotatedShape.SetNum(Columns);
 
 	for (int32 i = 0; i < Columns; ++i)

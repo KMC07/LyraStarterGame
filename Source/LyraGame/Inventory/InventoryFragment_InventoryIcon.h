@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "InventoryDataLibrary.h"
 #include "LyraInventoryItemDefinition.h"
 #include "UObject/ObjectPtr.h"
 
@@ -9,59 +10,6 @@
 
 class UObject;
 class USkeletalMesh;
-
-USTRUCT(BlueprintType)
-struct FItem2DShape
-{
-	GENERATED_BODY()
-
-public:
-	TArray<bool> ShapeRow;
-
-	bool operator[](int32 i) const
-	{
-		return ShapeRow[i];
-	}
-
-	bool& operator[](int32 i)
-	{
-		return ShapeRow[i];
-	}
-
-	void Add(bool Cell)
-	{
-		ShapeRow.Add(Cell);
-	}
-
-	int32 Num() const
-	{
-		return ShapeRow.Num();
-	}
-
-	void SetNum(int32 NewNum)
-	{
-		ShapeRow.SetNum(NewNum);
-	}
-
-	void Init(int32 Size, bool Value)
-	{
-		ShapeRow.Init(Value, Size);
-	}
-	
-	bool IsValidIndex(int32 Index) const
-	{
-		return ShapeRow.IsValidIndex(Index);
-	}
-};
-
-UENUM(BlueprintType)
-enum class EItemRotation : uint8
-{
-	Rotation_0 UMETA(DisplayName = "0 Degrees"),
-	Rotation_90 UMETA(DisplayName = "90 Degrees"),
-	Rotation_180 UMETA(DisplayName = "180 Degrees"),
-	Rotation_270 UMETA(DisplayName = "270 Degrees")
-};
 
 UCLASS()
 class UInventoryFragment_InventoryIcon : public ULyraInventoryItemFragment
@@ -86,7 +34,7 @@ public:
 
 	// the shape of the item where each each element is valid slot
 	UPROPERTY(EditAnywhere, Category=Item)
-	TArray<FItem2DShape> Shape;
+	TArray<F1DBooleanRow> Shape;
 
 	UPROPERTY(EditAnywhere, Category=Item)
 	bool bCanBeDropped = true;

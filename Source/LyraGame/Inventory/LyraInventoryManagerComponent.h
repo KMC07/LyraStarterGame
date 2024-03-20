@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Components/ActorComponent.h"
+#include "InventoryDataLibrary.h"
 #include "Net/Serialization/FastArraySerializer.h"
 
 #include "LyraInventoryManagerComponent.generated.h"
@@ -12,6 +13,7 @@ class ULyraInventoryItemInstance;
 class ULyraInventoryManagerComponent;
 class UObject;
 struct FFrame;
+struct FGridCellInfoList;
 struct FInventoryList;
 struct FNetDeltaSerializeInfo;
 struct FReplicationFlags;
@@ -59,14 +61,6 @@ private:
 
 	UPROPERTY(NotReplicated)
 	int32 LastObservedCount = INDEX_NONE;
-
-	// This is inventory coordinates of the item's most top left slot at 0 degrees
-	UPROPERTY()
-	FIntPoint RootSlot = FIntPoint(-1, -1);
-
-	// this is the current degree the item has [Available Rotations = (0, 90, 180, 270)]
-	UPROPERTY()
-	uint16 Rotation = 0;
 };
 
 /** List of inventory items */
@@ -127,10 +121,121 @@ struct TStructOpsTypeTraits<FInventoryList> : public TStructOpsTypeTraitsBase2<F
 
 
 
+/** A message when an grid cell has changed */
+USTRUCT(BlueprintType)
+struct FGridCellInventoryChangedMessage
+{
+	GENERATED_BODY()
+
+	//@TODO: Tag based names+owning actors for inventories instead of directly exposing the component?
+	UPROPERTY(BlueprintReadOnly, Category=Inventory)
+	TObjectPtr<UActorComponent> InventoryOwner = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = Inventory)
+	TObjectPtr<ULyraInventoryItemInstance> Instance = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category=Inventory)
+	EItemRotation NewRotation = EItemRotation::Rotation_0;
+
+	UPROPERTY(BlueprintReadOnly, Category=Inventory)
+	EItemRotation OldRotation = EItemRotation::Rotation_0;
+};
 
 
+/** A single grid in an inventory */
+USTRUCT(BlueprintType)
+struct FGridCellInfo : public FFastArraySerializerItem
+{
+	GENERATED_BODY()
 
+	FGridCellInfo()
+	{}
 
+	FGridCellInfo(FIntPoint InPosition, ULyraInventoryItemInstance* InItemInstance) : Position(InPosition), ItemInstance(InItemInstance) {}
+	
+	FString GetDebugString() const;
+
+private:
+	friend FGridCellInfoList;
+	friend ULyraInventoryManagerComponent;
+	
+	// The position of the cell in the inventory grid
+	UPROPERTY()
+	FIntPoint Position = FIntPoint(-1);
+
+	UPROPERTY()
+	EItemRotation Rotation = EItemRotation::Rotation_0;
+
+	UPROPERTY(NotReplicated)
+	EItemRotation LastObservedRotation = EItemRotation::Rotation_0;
+
+	// The item that belongs in this cell
+	UPROPERTY()
+	TObjectPtr<ULyraInventoryItemInstance> ItemInstance = nullptr;
+};
+
+/** List of inventory grids in the inventory */
+USTRUCT(BlueprintType)
+struct FGridCellInfoList : public FFastArraySerializer
+{
+	GENERATED_BODY()
+
+	FGridCellInfoList()
+		: OwnerComponent(nullptr)
+	{
+	}
+
+	FGridCellInfoList(UActorComponent* InOwnerComponent)
+		: OwnerComponent(InOwnerComponent)
+	{
+	}
+	
+public:
+	//~FFastArraySerializer contract
+	void PreReplicatedRemove(const TArrayView<int32> RemovedIndices, int32 FinalSize);
+	void PostReplicatedAdd(const TArrayView<int32> AddedIndices, int32 FinalSize);
+	void PostReplicatedChange(const TArrayView<int32> ChangedIndices, int32 FinalSize);
+	//~End of FFastArraySerializer contract
+
+	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+	{
+		return FFastArraySerializer::FastArrayDeltaSerialize<FGridCellInfo, FGridCellInfoList>(GridCells, DeltaParms, *this);
+	}
+
+	void UpdateCellPosition(int32 SlotIndex, const FIntPoint& NewPosition);
+	void UpdateCellItemInstance(int32 SlotIndex, ULyraInventoryItemInstance* NewItemInstance);
+
+	void PopulateInventoryGrid(const TArray<F1DBooleanRow>& GridShape);
+private:
+	//Index mapping functions
+	bool IsSlotAccessible(const FIntPoint& SlotCoords);
+
+	int32 FindGridCellFromCoords(const FIntPoint& SlotCoords);
+	
+private:
+	void BroadcastGridCellInventoryChangedMessage(FGridCellInfo& Entry, const EItemRotation& OldRotation, const EItemRotation& NewRotation);
+
+private:
+	friend ULyraInventoryManagerComponent;
+
+private:
+	// Replicated list of grids
+	UPROPERTY()
+	TArray<FGridCellInfo> GridCells;
+
+	UPROPERTY(NotReplicated)
+	TObjectPtr<UActorComponent> OwnerComponent;
+
+	// map to make finding the grid cells using X and Y coords O(1)
+	UPROPERTY(NotReplicated)
+	TArray<F1DIntegerRow> GridCellIndexMap;
+};
+
+template<>
+struct TStructOpsTypeTraits<FGridCellInfoList> : public TStructOpsTypeTraitsBase2<FGridCellInfoList>
+{
+	enum { WithNetDeltaSerializer = true };
+};
 
 
 
@@ -280,13 +385,13 @@ public:
 		const FIntPoint& RootSlot, int32 Rotation, ULyraInventoryItemInstance*& OutNewItem);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory)
-	void RemoveItemFromSlot(const FIntPoint& InventorySlot, int32 Amount, bool bRemoveEntireStack);
+	void RemoveItemFromSlot(int32 GridCellIndex, int32 Amount, bool bRemoveEntireStack);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory)
 	TArray<FInventorySlotFound> FindAvailableSlotsForItem(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 AmountToFind, bool bSearchStacks);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory)
-	TArray<FIntPoint> FindSlotsFromShape(const FIntPoint& RootSlot, const TArray<FItem2DShape>& Shape, int32 Rotation);
+	TArray<FIntPoint> FindSlotsFromShape(const FIntPoint& RootSlot, const TArray<F1DBooleanRow>& Shape, int32 Rotation);
 	
 	UFUNCTION(BlueprintCallable, Category=Inventory)
 	bool CanPlaceItemInEmptySlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, const FIntPoint& RootSlot, int32 Rotation);
@@ -308,7 +413,7 @@ public:
 
 
 	// Initialiser
-	void InitialiseInventoryComponent(const FText& InContainerName, const TArray<FInventory2DSlot>& InInventoryGrid,
+	void InitialiseInventoryComponent(const FText& InContainerName, const TArray<F1DBooleanRow>& InInventoryGrid,
 		const TArray<FSpecificItemDefinition>& InStartingItems, float InMaxWeight, bool InIgnoreChildInventoryWeights,
 		int32 InItemCountLimit, bool InIgnoreChildInventoryItemCounts, const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InAllowedItems,
 		const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InDisallowedItems, const TArray<FSpecificItemDefinition>& InSpecificItemCountLimits,
@@ -351,14 +456,14 @@ private:
 	void UpdateItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount, bool bAdd);
 	
 	// This rotates a shape to the desired degree out of select choices (0, 90, 180, 270)
-	TArray<FItem2DShape> RotateShape (const TArray<FItem2DShape>& Shape, uint16 Rotation);
+	TArray<F1DBooleanRow> RotateShape (const TArray<F1DBooleanRow>& Shape, uint16 Rotation);
 
 	// this rotates a shape by 90 degrees
-	TArray<FItem2DShape> RotateShape90Degrees(const TArray<FItem2DShape>& Shape);
+	TArray<F1DBooleanRow> RotateShape90Degrees(const TArray<F1DBooleanRow>& Shape);
 
 	// this function would almost always be called by a base inventory (no need to expose it)
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
-	int32 CanAddItemDefinitionInParent(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount = 1,
+	int32 CanAddItemDefinitionInParent(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount,
 		bool ItemWeightIncrease, bool ItemCountIncrease, int32 TotalSpecificItemCount);
 
 
@@ -366,10 +471,10 @@ private:
 protected:
 	UPROPERTY(EditAnywhere)
 	FText ContainerName = FText::FromString("Container");
-
+	
 	// Keep this as empty if there is no spatial awareness in the inventory (think of COD or Fortnite where inventory slot position doesn't matter)
-	UPROPERTY(Replicated)
-	TArray<FInventory2DSlot> InventoryGrid;
+	UPROPERTY(EditAnywhere, Category=Item)
+	TArray<F1DBooleanRow> InventoryGridShape;
 	
 	// these are the itemn the inventory starts with
 	UPROPERTY(EditAnywhere)
@@ -410,6 +515,9 @@ protected:
 private:
 	UPROPERTY(Replicated)
 	FInventoryList InventoryList;
+
+	UPROPERTY(Replicated)
+	FGridCellInfoList InventoryGrid;
 	
 	UPROPERTY(Replicated)
 	float ItemCount;

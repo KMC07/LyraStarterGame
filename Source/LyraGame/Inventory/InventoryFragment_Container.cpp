@@ -3,7 +3,6 @@
 #include "InventoryFragment_Container.h"
 
 #include "GlobalInventoryManager.h"
-#include "LyraInventoryItemInstance.h"
 #include "LyraInventoryManagerComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(InventoryFragment_Container)

@@ -50,13 +50,13 @@ TArray<EItemRotation> UInventoryFragment_InventoryIcon::CalculateAllowedRotation
 	if (Shape.Num() == 0) return AllowedRotations; // Return empty if shape is not defined
 
 	int32 Width = Shape.Num(); // Assuming each 'FItem2DShape' is a row, so 'Width' is the number of rows
-	int32 Height = Shape[0].ShapeRow.Num(); // Assuming uniform height for simplicity, based on the first row
+	int32 Height = Shape[0].BooleanRow.Num(); // Assuming uniform height for simplicity, based on the first row
 
 	// Checking if all rows have the same length and determining if the shape is square or rectangular
 	bool bIsUniformHeight = true;
-	for (const FItem2DShape& Row : Shape)
+	for (const F1DBooleanRow& Row : Shape)
 	{
-		if (Row.ShapeRow.Num() != Height)
+		if (Row.BooleanRow.Num() != Height)
 		{
 			bIsUniformHeight = false;
 			break;
