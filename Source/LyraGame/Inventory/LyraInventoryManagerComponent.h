@@ -98,6 +98,8 @@ public:
 
 	void RemoveEntry(ULyraInventoryItemInstance* Instance);
 
+	void ClearInventoryEntries();
+
 private:
 	void BroadcastChangeMessage(FInventoryEntry& Entry, int32 OldCount, int32 NewCount);
 
@@ -202,10 +204,11 @@ public:
 		return FFastArraySerializer::FastArrayDeltaSerialize<FGridCellInfo, FGridCellInfoList>(GridCells, DeltaParms, *this);
 	}
 
-	void UpdateCellPosition(int32 SlotIndex, const FIntPoint& NewPosition);
+	void UpdateCellRotation(int32 SlotIndex, const EItemRotation& NewRotation);
 	void UpdateCellItemInstance(int32 SlotIndex, ULyraInventoryItemInstance* NewItemInstance);
 
 	void PopulateInventoryGrid(const TArray<F1DBooleanRow>& GridShape);
+	void EmptyGridItems();
 private:
 	//Index mapping functions
 	bool IsSlotAccessible(const FIntPoint& SlotCoords);
@@ -326,13 +329,13 @@ struct FInventorySlotFound
 	FIntPoint RootIndex;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	int32 SupportedRotation;
+	EItemRotation SupportedRotation;
 
 	FInventorySlotFound()
-		: RootIndex(FIntPoint(0, 0)), SupportedRotation(0)
+		: RootIndex(FIntPoint(0, 0)), SupportedRotation(EItemRotation::Rotation_0)
 	{}
 
-	FInventorySlotFound(const FIntPoint& InRootIndex, int32 InSupportedRotation)
+	FInventorySlotFound(const FIntPoint& InRootIndex, const EItemRotation& InSupportedRotation)
 	{
 		RootIndex = InRootIndex;
 		SupportedRotation = InSupportedRotation;
@@ -355,7 +358,7 @@ public:
 
 	UFUNCTION(Category=Inventory)
 	ULyraInventoryItemInstance* AddItemDefinitionToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount,
-		const FIntPoint& RootSlot, int32 Rotation);
+		const FIntPoint& RootSlot, const EItemRotation& Rotation);
 	
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
 	void AddItemInstance(ULyraInventoryItemInstance* ItemInstance);
@@ -382,7 +385,7 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category=Inventory)
 	UPARAM(DisplayName = "RemainingItem") int32 AddItemToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Amount,
-		const FIntPoint& RootSlot, int32 Rotation, ULyraInventoryItemInstance*& OutNewItem);
+		const FIntPoint& RootSlot, const EItemRotation& Rotation, ULyraInventoryItemInstance*& OutNewItem);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory)
 	void RemoveItemFromSlot(int32 GridCellIndex, int32 Amount, bool bRemoveEntireStack);
@@ -391,10 +394,10 @@ public:
 	TArray<FInventorySlotFound> FindAvailableSlotsForItem(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 AmountToFind, bool bSearchStacks);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory)
-	TArray<FIntPoint> FindSlotsFromShape(const FIntPoint& RootSlot, const TArray<F1DBooleanRow>& Shape, int32 Rotation);
+	TArray<FIntPoint> FindSlotsFromShape(const FIntPoint& RootSlot, const TArray<F1DBooleanRow>& Shape, const EItemRotation& Rotation);
 	
 	UFUNCTION(BlueprintCallable, Category=Inventory)
-	bool CanPlaceItemInEmptySlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, const FIntPoint& RootSlot, int32 Rotation);
+	bool CanPlaceItemInEmptySlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, const FIntPoint& RootSlot, const EItemRotation& Rotation);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory)
 	UPARAM(DisplayName = "SuccessfullySplit") bool SplitItemStack(ULyraInventoryItemInstance* ItemInstance, int32 AmountToSplit);
@@ -449,14 +452,12 @@ public:
 	
 private:
 
-	bool IsValidSlot(const FIntPoint& Slot);
-
 	bool IsSlotOverlapping(const FIntPoint& Slot1, const FIntPoint& Slot2);
 
 	void UpdateItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount, bool bAdd);
 	
 	// This rotates a shape to the desired degree out of select choices (0, 90, 180, 270)
-	TArray<F1DBooleanRow> RotateShape (const TArray<F1DBooleanRow>& Shape, uint16 Rotation);
+	TArray<F1DBooleanRow> RotateShape (const TArray<F1DBooleanRow>& Shape, const EItemRotation& Rotation);
 
 	// this rotates a shape by 90 degrees
 	TArray<F1DBooleanRow> RotateShape90Degrees(const TArray<F1DBooleanRow>& Shape);
