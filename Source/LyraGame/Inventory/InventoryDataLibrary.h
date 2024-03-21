@@ -76,7 +76,7 @@ public:
 		return IntegerRow[i];
 	}
 
-	void Add(bool Cell)
+	void Add(int32 Cell)
 	{
 		IntegerRow.Add(Cell);
 	}
@@ -99,5 +99,62 @@ public:
 	bool IsValidIndex(int32 Index) const
 	{
 		return IntegerRow.IsValidIndex(Index);
+	}
+};
+
+USTRUCT(BlueprintType)
+struct FInventoryClumpShape
+{
+	GENERATED_BODY()
+
+public:
+	// The shape/layout of the clump as a boolean grid
+	UPROPERTY(EditAnywhere)
+	TArray<F1DBooleanRow> ClumpGrid;
+};
+
+USTRUCT(BlueprintType)
+struct FInventoryClumpIndexMapping
+{
+	GENERATED_BODY()
+
+public:
+	// The index mapping of the clump to grid cell indexes
+	UPROPERTY(EditAnywhere)
+	TArray<F1DIntegerRow> ClumpGrid;
+
+	F1DIntegerRow operator[](int32 i) const
+	{
+		return ClumpGrid[i];
+	}
+
+	F1DIntegerRow& operator[](int32 i)
+	{
+		return ClumpGrid[i];
+	}
+
+	void Add(const F1DIntegerRow& Cell)
+	{
+		ClumpGrid.Add(Cell);
+	}
+
+	int32 Num() const
+	{
+		return ClumpGrid.Num();
+	}
+
+	void SetNum(int32 NewNum)
+	{
+		ClumpGrid.SetNum(NewNum);
+	}
+
+	void Init(int32 Size, const F1DIntegerRow& Value)
+	{
+		ClumpGrid.Init(Value, Size);
+	}
+	
+	bool IsValidIndex(int32 Index) const
+	{
+		return ClumpGrid.IsValidIndex(Index);
 	}
 };

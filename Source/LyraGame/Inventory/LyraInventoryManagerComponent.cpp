@@ -277,38 +277,49 @@ void FGridCellInfoList::UpdateCellItemInstance(int32 SlotIndex, ULyraInventoryIt
 	}
 }
 
-void FGridCellInfoList::PopulateInventoryGrid(const TArray<F1DBooleanRow>& GridShape)
+void FGridCellInfoList::PopulateInventoryGrid(const TArray<FInventoryClumpShape>& ClumpShapes)
 {
-	GridCells.Empty(); // Clear existing grid cells
-	GridCellIndexMap.Empty(); // Clear existing mapping
+	// Clear existing grid cells and index maps
+	GridCells.Empty();
+	GridCellIndexMap.Empty();
 
-	// Resize GridCellIndexMap to match GridShape size
-	GridCellIndexMap.SetNum(GridShape.Num());
+	// Resize the GridCellIndexMap to hold the mappings for each clump
+	GridCellIndexMap.SetNum(ClumpShapes.Num());
 
-	for (int32 RowIndex = 0; RowIndex < GridShape.Num(); ++RowIndex)
+	// Iterate through each clump to populate its grid cells and index mapping
+	for (int32 ClumpIndex = 0; ClumpIndex < ClumpShapes.Num(); ++ClumpIndex)
 	{
-		const F1DBooleanRow& Row = GridShape[RowIndex];
+		const FInventoryClumpShape& ClumpShape = ClumpShapes[ClumpIndex];
+		FInventoryClumpIndexMapping& ClumpMapping = GridCellIndexMap[ClumpIndex];
 
-		// Ensure the integer row has the correct size
-		GridCellIndexMap[RowIndex].SetNum(Row.Num());
+		// Initialize the index mapping for this clump
+		ClumpMapping.Init(ClumpShape.ClumpGrid.Num(), F1DIntegerRow());
 
-		for (int32 ColIndex = 0; ColIndex < Row.Num(); ++ColIndex)
+		for (int32 RowIndex = 0; RowIndex < ClumpShape.ClumpGrid.Num(); ++RowIndex)
 		{
-			if (Row[ColIndex]) // If the cell is accessible
+			const F1DBooleanRow& Row = ClumpShape.ClumpGrid[RowIndex];
+
+			// Ensure the integer row for index mapping has the correct size
+			ClumpMapping[RowIndex].Init(Row.Num(), -1);
+
+			for (int32 ColIndex = 0; ColIndex < Row.Num(); ++ColIndex)
 			{
-				// Create and add a new FGridCellInfo for the accessible cell
-				FGridCellInfo& NewCell = GridCells.AddDefaulted_GetRef();
-				NewCell.Position = FIntPoint(ColIndex, RowIndex);
-				NewCell.ItemInstance = nullptr;
-				MarkItemDirty(NewCell);
-				
-				// Update the GridCellIndexMap with the index of the new cell
-				GridCellIndexMap[RowIndex][ColIndex] = GridCells.Num() - 1;
-			}
-			else
-			{
-				// Mark the cell as invalid in the GridCellIndexMap
-				GridCellIndexMap[RowIndex][ColIndex] = -1;
+				if (Row[ColIndex]) // If the cell is part of the clump
+				{
+					// Create and add a new FGridCellInfo for the accessible cell
+					FGridCellInfo& NewCell = GridCells.AddDefaulted_GetRef();
+					NewCell.Position = FIntPoint(ColIndex, RowIndex);
+					NewCell.ClumpID = ClumpIndex; // Assign the cell to this clump
+					MarkItemDirty(NewCell);
+                    
+					// Update the ClumpMapping with the index of the new cell
+					ClumpMapping[RowIndex][ColIndex] = GridCells.Num() - 1;
+				}
+				else
+				{
+					// Mark the cell as invalid in the GridCellIndexMap
+					ClumpMapping[RowIndex][ColIndex] = -1;
+				}
 			}
 		}
 	}
@@ -338,22 +349,24 @@ void FGridCellInfoList::BroadcastGridInventoryChangedMessage(FGridCellInfo& Entr
 	MessageSystem.BroadcastMessage(TAG_Lyra_Inventory_Message_GridCellChanged, Message);
 }
 
-int32 FGridCellInfoList::FindGridCellFromCoords(const FIntPoint& SlotCoords)
+int32 FGridCellInfoList::FindGridCellFromCoords(int32 Clump, const FIntPoint& SlotCoords)
 {
-	if(IsSlotAccessible(SlotCoords))
+	if(IsSlotAccessible(Clump, SlotCoords))
 	{
-		return GridCellIndexMap[SlotCoords.Y][SlotCoords.X];
+		return GridCellIndexMap[Clump][SlotCoords.Y][SlotCoords.X];
 	}
 	return -1;
 }
 
-bool FGridCellInfoList::IsSlotAccessible(const FIntPoint& SlotCoords)
+bool FGridCellInfoList::IsSlotAccessible(int32 Clump, const FIntPoint& SlotCoords)
 {
-	const bool bSlotValid = SlotCoords.Y >= 0 && SlotCoords.Y < GridCellIndexMap.Num() && SlotCoords.X >= 0 && SlotCoords.X < GridCellIndexMap[SlotCoords.Y].Num();
-	if(bSlotValid)
+	const bool bIsClumpValid = Clump >= 0 && Clump < GridCellIndexMap.Num();
+	const bool bIsRowValid = bIsClumpValid && SlotCoords.Y >= 0 && SlotCoords.Y < GridCellIndexMap[Clump].Num();
+	const bool bIsColumnValid = bIsRowValid && SlotCoords.X >= 0 && SlotCoords.X < GridCellIndexMap[Clump][SlotCoords.Y].Num();
+	if(bIsClumpValid && bIsRowValid && bIsColumnValid)
 	{
 		// inaccessible cells do not reference any grid cell index hence -1
-		return GridCellIndexMap[SlotCoords.Y][SlotCoords.X] > -1; 
+		return GridCellIndexMap[Clump][SlotCoords.Y][SlotCoords.X] > -1; 
 	}
 
 	return false;
@@ -371,7 +384,7 @@ ULyraInventoryManagerComponent::ULyraInventoryManagerComponent(const FObjectInit
 }
 
 inline void ULyraInventoryManagerComponent::InitialiseInventoryComponent(const FText& InContainerName,
-	const TArray<F1DBooleanRow>& InInventoryGrid, const TArray<FSpecificItemDefinition>& InStartingItems,
+	const TArray<FInventoryClumpShape>& InInventoryGrid, const TArray<FSpecificItemDefinition>& InStartingItems,
 	float InMaxWeight, bool InIgnoreChildInventoryWeights, int32 InItemCountLimit,
 	bool InIgnoreChildInventoryItemCounts, const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InAllowedItems,
 	const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InDisallowedItems,
@@ -478,8 +491,8 @@ ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinition(TS
 	return Result;
 }
 
-ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinitionToSlot(
-	TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount, const FIntPoint& RootSlot, const EItemRotation& Rotation)
+ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinitionToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount,
+	int32 ClumpID, const FIntPoint& RootSlot, const EItemRotation& Rotation)
 {
 	ULyraInventoryItemInstance* Result = nullptr;
 	if (ItemDef != nullptr)
@@ -488,7 +501,7 @@ ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinitionToS
 		UpdateItemCount(Result, StackCount, true);
 
 		// update the grid cell with the appropriate information
-		const int32 RootSlotIndex = InventoryGrid.FindGridCellFromCoords(RootSlot);
+		const int32 RootSlotIndex = InventoryGrid.FindGridCellFromCoords(ClumpID, RootSlot);
 		InventoryGrid.UpdateCellRotation(RootSlotIndex, Rotation);
 		Result->AddStatTagStack(TAG_Lyra_Inventory_Item_RootSlot, RootSlotIndex);
 
@@ -681,7 +694,8 @@ int32 ULyraInventoryManagerComponent::CanAddItemDefinitionInParent(TSubclassOf<U
 	// stop traversing if there we cannot add an item, or there is no parent inventory
 	if (AllowedAmount > 0 && IsValid(ParentInventory))
 	{
-		AllowedAmount = ParentInventory->CanAddItemDefinitionInParent(ItemDef, AllowedAmount, CanItemWeightIncrease, CanItemCountIncrease, TotalSpecificItemCount);
+		AllowedAmount = ParentInventory->CanAddItemDefinitionInParent(ItemDef, AllowedAmount,
+			CanItemWeightIncrease, CanItemCountIncrease, TotalSpecificItemCount);
 	}
 
 	// don't return negative values
@@ -696,10 +710,10 @@ int32 ULyraInventoryManagerComponent::AddItem(TSubclassOf<ULyraInventoryItemDefi
 	if (!IsValid(ItemDef) || Amount <= 0)
 		return Amount;
 
-	ULyraInventoryItemDefinition* ItemDefinition = ItemDef.GetDefaultObject();
+	const ULyraInventoryItemDefinition* ItemDefinition = ItemDef.GetDefaultObject();
 	const UInventoryFragment_InventoryIcon* InventoryIconFragment = ItemDefinition->FindFragmentByClass<UInventoryFragment_InventoryIcon>();
 
-	int32 AmountAllowed = CanAddItemDefinition(ItemDef, Amount);
+	const int32 AmountAllowed = CanAddItemDefinition(ItemDef, Amount);
 	if(AmountAllowed == 0)
 		// return the remaining amount which is `amount` since nothing was added to the inventory
 		return Amount;
@@ -720,8 +734,8 @@ int32 ULyraInventoryManagerComponent::AddItem(TSubclassOf<ULyraInventoryItemDefi
 			}
 			else
 			{
-				int32 AvailableSpace = InventoryIconFragment->MaxStackSize - Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count);
-				int32 AmountToAdd = FMath::Min(RemainingAmount, AvailableSpace);
+				const int32 AvailableSpace = InventoryIconFragment->MaxStackSize - Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count);
+				const int32 AmountToAdd = FMath::Min(RemainingAmount, AvailableSpace);
 				RemainingAmount -= AmountToAdd;
 
 				OutStackedItems.Add(Entry.Instance);
@@ -750,10 +764,12 @@ int32 ULyraInventoryManagerComponent::AddItem(TSubclassOf<ULyraInventoryItemDefi
 		// Add the item to available empty slots
 		for (const FInventorySlotFound& EmptySlotFound : AvailableEmptySlots)
 		{
-			int32 AmountToAdd = FMath::Min(RemainingAmount, InventoryIconFragment->MaxStackSize);
+			const int32 AmountToAdd = FMath::Min(RemainingAmount,
+				InventoryIconFragment->MaxStackSize);
 			
 			ULyraInventoryItemInstance* NewItemInstance = nullptr;
-			AddItemToSlot(ItemDef, AmountToAdd, EmptySlotFound.RootIndex, EmptySlotFound.SupportedRotation, NewItemInstance);
+			AddItemToSlot(ItemDef, AmountToAdd, EmptySlotFound.ClumpID, EmptySlotFound.RootIndex,
+				EmptySlotFound.SupportedRotation, NewItemInstance);
 
 			if (NewItemInstance)
 			{
@@ -832,7 +848,7 @@ void ULyraInventoryManagerComponent::RemoveItem(ULyraInventoryItemInstance* Item
 }
 
 
-int32 ULyraInventoryManagerComponent::AddItemToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Amount,
+int32 ULyraInventoryManagerComponent::AddItemToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Amount, int32 ClumpID,
 	const FIntPoint& RootSlot, const EItemRotation& Rotation, ULyraInventoryItemInstance*& OutNewItem)
 {
 	// Get the amount of the item definition that can be added to this inventory
@@ -856,7 +872,7 @@ int32 ULyraInventoryManagerComponent::AddItemToSlot(TSubclassOf<ULyraInventoryIt
 	AmountAllowed = FMath::Min(AmountAllowed, InventoryIconFragment->MaxStackSize);
 	
 	// Check empty slots in the inventory grid
-	const int32 GridCellIndex = InventoryGrid.FindGridCellFromCoords(RootSlot);
+	const int32 GridCellIndex = InventoryGrid.FindGridCellFromCoords(ClumpID, RootSlot);
 	if(GridCellIndex == -1)
 		return 0;
 	
@@ -878,7 +894,7 @@ int32 ULyraInventoryManagerComponent::AddItemToSlot(TSubclassOf<ULyraInventoryIt
 	else
 	{
 		// Add new entry to the inventory
-		OutNewItem = AddItemDefinitionToSlot(ItemDef, AmountAllowed, RootSlot, Rotation);
+		OutNewItem = AddItemDefinitionToSlot(ItemDef, AmountAllowed, ClumpID, RootSlot, Rotation);
 	}
 
 	// return the remaining amount
@@ -902,6 +918,9 @@ void ULyraInventoryManagerComponent::RemoveItemFromSlot(int32 GridCellIndex, int
 	// Get the root slot location of the item in the inventory
 	const FIntPoint RootSlot(InventoryGrid.GridCells[GridCellIndex].Position);
 
+	// get the clump ID for the item
+	const int32 ClumpID = InventoryGrid.GridCells[GridCellIndex].ClumpID;
+	
 	// are we completely removing the item instance from the inventory
 	if(bRemoveEntireStack || Amount >= ItemInstance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count))
 	{
@@ -909,7 +928,8 @@ void ULyraInventoryManagerComponent::RemoveItemFromSlot(int32 GridCellIndex, int
 		// set the slots to empty
 		for (const FIntPoint& Slot : OccupiedSlots)
 		{
-			const int32 SlotIndex = InventoryGrid.FindGridCellFromCoords(Slot);
+			
+			const int32 SlotIndex = InventoryGrid.FindGridCellFromCoords(ClumpID, Slot);
 			InventoryGrid.UpdateCellItemInstance(SlotIndex, nullptr);
 		}
 		
@@ -947,14 +967,14 @@ TArray<FInventorySlotFound> ULyraInventoryManagerComponent::FindAvailableSlotsFo
 				const int32 RootSlotIndex = Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_RootSlot);
 				
 				// check if there is avaiable stack space
-				int32 AvailableStackSpace = InventoryIconFragment->MaxStackSize - Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count);
-				int32 AmountToAdd = FMath::Min(RemainingAmount, AvailableStackSpace);
+				const int32 AvailableStackSpace = InventoryIconFragment->MaxStackSize - Entry.Instance->GetStatTagStackCount(TAG_Lyra_Inventory_Item_Count);
+				const int32 AmountToAdd = FMath::Min(RemainingAmount, AvailableStackSpace);
 
 				if(AmountToAdd > 0)
 				{
 					// add this slot to the available slots we can add
 					AvailableSlots.Add(FInventorySlotFound(InventoryGrid.GridCells[RootSlotIndex].Position,
-						InventoryGrid.GridCells[RootSlotIndex].Rotation));
+						InventoryGrid.GridCells[RootSlotIndex].Rotation, -1));
 				}
 				
 				RemainingAmount -= AmountToAdd;
@@ -970,17 +990,20 @@ TArray<FInventorySlotFound> ULyraInventoryManagerComponent::FindAvailableSlotsFo
 	// Check empty slots in the inventory grid
 	for (const auto& GridCell : InventoryGrid.GridCells)
 	{
-		FIntPoint RootSlot(GridCell.Position);
-
 		// Check if the slot is empty
 		if (GridCell.ItemInstance == nullptr)
 		{
+			// get the clump of the grid cell we are checking
+			const int32 ClumpID = GridCell.ClumpID;
+			// get the position of the slot
+			const FIntPoint RootSlot(GridCell.Position);
+			
 			// Try placing the item with each rotation
 			for (auto& AllowedRotation : InventoryIconFragment->AllowedRotations)
 			{
-				if (CanPlaceItemInEmptySlot(ItemDef, RootSlot, AllowedRotation))
+				if (CanPlaceItemInEmptySlot(ItemDef, ClumpID, RootSlot, AllowedRotation))
 				{
-					AvailableSlots.Add(FInventorySlotFound(RootSlot, AllowedRotation));
+					AvailableSlots.Add(FInventorySlotFound(RootSlot, AllowedRotation, ClumpID));
 					RemainingAmount--;
 					break;
 				}
@@ -1016,7 +1039,7 @@ TArray<FIntPoint> ULyraInventoryManagerComponent::FindSlotsFromShape(const FIntP
 }
 
 
-bool ULyraInventoryManagerComponent::CanPlaceItemInEmptySlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, const FIntPoint& RootSlot, const EItemRotation& Rotation)
+bool ULyraInventoryManagerComponent::CanPlaceItemInEmptySlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Clump, const FIntPoint& RootSlot, const EItemRotation& Rotation)
 {
 	if (!IsValid(ItemDef))
 		return false;
@@ -1028,18 +1051,18 @@ bool ULyraInventoryManagerComponent::CanPlaceItemInEmptySlot(TSubclassOf<ULyraIn
 	ULyraInventoryItemDefinition* ItemDefinition = ItemDef.GetDefaultObject();
 	if(const UInventoryFragment_InventoryIcon* InventoryIconFragment = ItemDefinition->FindFragmentByClass<UInventoryFragment_InventoryIcon>())
 	{
-		TArray<F1DBooleanRow> ItemShape = InventoryIconFragment->Shape;
+		const TArray<F1DBooleanRow> ItemShape = InventoryIconFragment->Shape;
 	
 		TArray<FIntPoint> OccupiedSlots = FindSlotsFromShape(RootSlot, ItemShape, Rotation);
 
 		for (const FIntPoint& Slot : OccupiedSlots)
 		{
 			// if the slots is not accessible
-			if (!InventoryGrid.IsSlotAccessible(Slot))
+			if (!InventoryGrid.IsSlotAccessible(Clump, Slot))
 				return false;
 
 			// check if the slot is occupied
-			const int32 GridCellIndex = InventoryGrid.FindGridCellFromCoords(Slot);
+			const int32 GridCellIndex = InventoryGrid.FindGridCellFromCoords(Clump, Slot);
 			if(GridCellIndex == -1)
 				return false;
 
@@ -1073,7 +1096,8 @@ bool ULyraInventoryManagerComponent::SplitItemStack(ULyraInventoryItemInstance* 
 	
 	// Create a new item and add that to the inventory
 	ULyraInventoryItemInstance* NewItemAdded = nullptr;
-	AddItemToSlot(ItemInstance->GetItemDef(), AmountToSplit, AvailableSlot[0].RootIndex, AvailableSlot[0].SupportedRotation, NewItemAdded);
+	AddItemToSlot(ItemInstance->GetItemDef(), AmountToSplit, AvailableSlot[0].ClumpID,
+		AvailableSlot[0].RootIndex, AvailableSlot[0].SupportedRotation, NewItemAdded);
 
 	return true;
 }
@@ -1209,12 +1233,6 @@ void ULyraInventoryManagerComponent::EmptyInventory()
 
 	// TODO propagate the weight loss to the parent inventories
 	
-}
-
-
-bool ULyraInventoryManagerComponent::IsSlotOverlapping(const FIntPoint& Slot1, const FIntPoint& Slot2)
-{
-	return Slot1.X == Slot2.X && Slot1.Y == Slot2.Y;
 }
 
 void ULyraInventoryManagerComponent::UpdateItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount, bool bAdd)

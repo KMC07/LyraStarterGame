@@ -39,9 +39,10 @@ public:
 	UPROPERTY(EditAnywhere, Category=InventoryConfig)
 	FText ContainerName = FText::FromString("Container");
 
-	// Do not allow this to be empty (as this doesn't make sense in the context of items. Must have a value
+	// Do not allow this to be empty (as this doesn't make sense in the context of item inventories.
+	// There would be no spatial awareness and no way access the items in this inventory if this value isn't set).
 	UPROPERTY(EditAnywhere, Category=InventoryConfig)
-	TArray<F1DBooleanRow> InventoryGrid;
+	TArray<FInventoryClumpShape> InventoryGrid;
 	
 	// these are the itemn the inventory starts with
 	UPROPERTY(EditAnywhere, Category=InventoryConfig)

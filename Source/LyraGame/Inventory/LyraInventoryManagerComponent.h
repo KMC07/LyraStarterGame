@@ -174,6 +174,10 @@ private:
 	// The item that belongs in this cell
 	UPROPERTY()
 	TObjectPtr<ULyraInventoryItemInstance> ItemInstance = nullptr;
+
+	// The clump this cell belongs to
+	UPROPERTY()
+	int32 ClumpID = -1;
 };
 
 /** List of inventory grids in the inventory */
@@ -207,13 +211,13 @@ public:
 	void UpdateCellRotation(int32 SlotIndex, const EItemRotation& NewRotation);
 	void UpdateCellItemInstance(int32 SlotIndex, ULyraInventoryItemInstance* NewItemInstance);
 
-	void PopulateInventoryGrid(const TArray<F1DBooleanRow>& GridShape);
+	void PopulateInventoryGrid(const TArray<FInventoryClumpShape>& ClumpShapes);
 	void EmptyGridItems();
 private:
 	//Index mapping functions
-	bool IsSlotAccessible(const FIntPoint& SlotCoords);
+	bool IsSlotAccessible(int32 Clump, const FIntPoint& SlotCoords);
 
-	int32 FindGridCellFromCoords(const FIntPoint& SlotCoords);
+	int32 FindGridCellFromCoords(int32 Clump, const FIntPoint& SlotCoords);
 	
 private:
 	void BroadcastGridInventoryChangedMessage(FGridCellInfo& Entry, const EItemRotation& OldRotation, const EItemRotation& NewRotation);
@@ -229,9 +233,9 @@ private:
 	UPROPERTY(NotReplicated)
 	TObjectPtr<UActorComponent> OwnerComponent;
 
-	// map to make finding the grid cells using X and Y coords O(1)
+	// array of clump grid that map to the grid cells index. It allows using X and Y coords efficiently
 	UPROPERTY(NotReplicated)
-	TArray<F1DIntegerRow> GridCellIndexMap;
+	TArray<FInventoryClumpIndexMapping> GridCellIndexMap;
 };
 
 template<>
@@ -330,15 +334,21 @@ struct FInventorySlotFound
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EItemRotation SupportedRotation;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 ClumpID;
 
 	FInventorySlotFound()
-		: RootIndex(FIntPoint(0, 0)), SupportedRotation(EItemRotation::Rotation_0)
+		: RootIndex(FIntPoint(0, 0)),
+	SupportedRotation(EItemRotation::Rotation_0),
+	ClumpID(0)
 	{}
 
-	FInventorySlotFound(const FIntPoint& InRootIndex, const EItemRotation& InSupportedRotation)
+	FInventorySlotFound(const FIntPoint& InRootIndex, const EItemRotation& InSupportedRotation, int32 InClumpID)
 	{
 		RootIndex = InRootIndex;
 		SupportedRotation = InSupportedRotation;
+		ClumpID = InClumpID;
 	}
 };
 
@@ -358,7 +368,7 @@ public:
 
 	UFUNCTION(Category=Inventory)
 	ULyraInventoryItemInstance* AddItemDefinitionToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount,
-		const FIntPoint& RootSlot, const EItemRotation& Rotation);
+		int32 ClumpID, const FIntPoint& RootSlot, const EItemRotation& Rotation);
 	
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
 	void AddItemInstance(ULyraInventoryItemInstance* ItemInstance);
@@ -384,7 +394,7 @@ public:
 	void RemoveItem(ULyraInventoryItemInstance* ItemInstance, int32 Amount, bool bRemoveEntireStack);
 	
 	UFUNCTION(BlueprintCallable, Category=Inventory)
-	UPARAM(DisplayName = "RemainingItem") int32 AddItemToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Amount,
+	UPARAM(DisplayName = "RemainingItem") int32 AddItemToSlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Amount, int32 ClumpID,
 		const FIntPoint& RootSlot, const EItemRotation& Rotation, ULyraInventoryItemInstance*& OutNewItem);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory)
@@ -397,7 +407,7 @@ public:
 	TArray<FIntPoint> FindSlotsFromShape(const FIntPoint& RootSlot, const TArray<F1DBooleanRow>& Shape, const EItemRotation& Rotation);
 	
 	UFUNCTION(BlueprintCallable, Category=Inventory)
-	bool CanPlaceItemInEmptySlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, const FIntPoint& RootSlot, const EItemRotation& Rotation);
+	bool CanPlaceItemInEmptySlot(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 Clump, const FIntPoint& RootSlot, const EItemRotation& Rotation);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory)
 	UPARAM(DisplayName = "SuccessfullySplit") bool SplitItemStack(ULyraInventoryItemInstance* ItemInstance, int32 AmountToSplit);
@@ -416,7 +426,7 @@ public:
 
 
 	// Initialiser
-	void InitialiseInventoryComponent(const FText& InContainerName, const TArray<F1DBooleanRow>& InInventoryGrid,
+	void InitialiseInventoryComponent(const FText& InContainerName, const TArray<FInventoryClumpShape>& InInventoryGrid,
 		const TArray<FSpecificItemDefinition>& InStartingItems, float InMaxWeight, bool InIgnoreChildInventoryWeights,
 		int32 InItemCountLimit, bool InIgnoreChildInventoryItemCounts, const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InAllowedItems,
 		const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InDisallowedItems, const TArray<FSpecificItemDefinition>& InSpecificItemCountLimits,
@@ -451,9 +461,6 @@ public:
 	}
 	
 private:
-
-	bool IsSlotOverlapping(const FIntPoint& Slot1, const FIntPoint& Slot2);
-
 	void UpdateItemCount(ULyraInventoryItemInstance* ItemInstance, int32 Amount, bool bAdd);
 	
 	// This rotates a shape to the desired degree out of select choices (0, 90, 180, 270)
@@ -475,7 +482,7 @@ protected:
 	
 	// Keep this as empty if there is no spatial awareness in the inventory (think of COD or Fortnite where inventory slot position doesn't matter)
 	UPROPERTY(EditAnywhere, Category=Item)
-	TArray<F1DBooleanRow> InventoryGridShape;
+	TArray<FInventoryClumpShape> InventoryGridShape;
 	
 	// these are the itemn the inventory starts with
 	UPROPERTY(EditAnywhere)
