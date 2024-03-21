@@ -76,7 +76,7 @@ DerivedDataCache/*
 # RiderLink plugin
 Plugins/Developer
 
-#ALS Plugin Content
-Plugins/ALS-Refactored-4.13/Binaries/*
-Plugins/ALS-Refactored-4.13/Build/*
-Plugins/ALS-Refactored-4.13/Intermediate/*
+# Ignore build and intermediate folders in plugins directory for Unreal Engine 5
+Plugins/*/Binaries/*
+Plugins/*/Intermediate/*
+
