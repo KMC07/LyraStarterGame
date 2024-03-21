@@ -254,7 +254,7 @@ void FGridCellInfoList::PostReplicatedChange(const TArrayView<int32> ChangedIndi
 	for (int32 Index : ChangedIndices)
 	{
 		FGridCellInfo& GridCellInfo = GridCells[Index];
-		BroadcastGridCellInventoryChangedMessage(GridCellInfo, /*OldRotation=*/ GridCellInfo.LastObservedRotation, /*NewRotation=*/ GridCellInfo.Rotation);
+		BroadcastGridInventoryChangedMessage(GridCellInfo, /*OldRotation=*/ GridCellInfo.LastObservedRotation, /*NewRotation=*/ GridCellInfo.Rotation);
 		GridCellInfo.LastObservedRotation = GridCellInfo.Rotation;
 	}
 }
