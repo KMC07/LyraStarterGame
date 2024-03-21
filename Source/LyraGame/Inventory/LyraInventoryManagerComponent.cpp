@@ -11,6 +11,7 @@
 #include "LyraInventoryItemDefinition.h"
 #include "LyraInventoryItemInstance.h"
 #include "NativeGameplayTags.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 #include "WorldPartition/WorldPartitionBuilder.h"
 
@@ -326,7 +327,7 @@ void FGridCellInfoList::EmptyGridItems()
 void FGridCellInfoList::BroadcastGridCellInventoryChangedMessage(FGridCellInfo& Entry, const EItemRotation& OldRotation,
                                                                  const EItemRotation& NewRotation)
 {
-	FGridCellInventoryChangedMessage Message;
+	FGridInventoryChangedMessage Message;
 	Message.InventoryOwner = OwnerComponent;
 	Message.Instance = Entry.ItemInstance;
 	Message.NewRotation = NewRotation;
@@ -1319,7 +1320,7 @@ TArray<F1DBooleanRow> ULyraInventoryManagerComponent::RotateShape90Degrees(const
 			RotatedShape[j][Rows - 1 - i] = Shape[i][j];
 		}
 	}
-
+	
 	return RotatedShape;
 }
 

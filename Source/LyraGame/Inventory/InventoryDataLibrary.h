@@ -18,6 +18,7 @@ struct F1DBooleanRow
 	GENERATED_BODY()
 
 public:
+	UPROPERTY(EditAnywhere)
 	TArray<bool> BooleanRow;
 
 	bool operator[](int32 i) const

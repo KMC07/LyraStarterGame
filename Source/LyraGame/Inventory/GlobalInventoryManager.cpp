@@ -73,7 +73,7 @@ ULyraInventoryManagerComponent* UGlobalInventoryManager::CreateNewInventory(
 
 	
 	// Create the new inventory component
-	ULyraInventoryManagerComponent* NewInventoryManager = NewObject<ULyraInventoryManagerComponent>(this);
+	ULyraInventoryManagerComponent* NewInventoryManager = NewObject<ULyraInventoryManagerComponent>(GetOwner());
 	check(NewInventoryManager);
 	
 	// Initialize the new inventory manager component based on the container's static data.

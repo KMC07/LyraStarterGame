@@ -125,7 +125,7 @@ struct TStructOpsTypeTraits<FInventoryList> : public TStructOpsTypeTraitsBase2<F
 
 /** A message when an grid cell has changed */
 USTRUCT(BlueprintType)
-struct FGridCellInventoryChangedMessage
+struct FGridInventoryChangedMessage
 {
 	GENERATED_BODY()
 
