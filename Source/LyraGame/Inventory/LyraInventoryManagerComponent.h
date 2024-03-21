@@ -216,7 +216,7 @@ private:
 	int32 FindGridCellFromCoords(const FIntPoint& SlotCoords);
 	
 private:
-	void BroadcastGridCellInventoryChangedMessage(FGridCellInfo& Entry, const EItemRotation& OldRotation, const EItemRotation& NewRotation);
+	void BroadcastGridInventoryChangedMessage(FGridCellInfo& Entry, const EItemRotation& OldRotation, const EItemRotation& NewRotation);
 
 private:
 	friend ULyraInventoryManagerComponent;

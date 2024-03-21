@@ -324,7 +324,8 @@ void FGridCellInfoList::EmptyGridItems()
 	}
 }
 
-void FGridCellInfoList::BroadcastGridCellInventoryChangedMessage(FGridCellInfo& Entry, const EItemRotation& OldRotation,
+
+void FGridCellInfoList::BroadcastGridInventoryChangedMessage(FGridCellInfo& Entry, const EItemRotation& OldRotation,
                                                                  const EItemRotation& NewRotation)
 {
 	FGridInventoryChangedMessage Message;
