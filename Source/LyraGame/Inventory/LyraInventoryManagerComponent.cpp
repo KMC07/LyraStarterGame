@@ -1052,7 +1052,9 @@ bool ULyraInventoryManagerComponent::CanPlaceItemInEmptySlot(TSubclassOf<ULyraIn
 	if(const UInventoryFragment_InventoryIcon* InventoryIconFragment = ItemDefinition->FindFragmentByClass<UInventoryFragment_InventoryIcon>())
 	{
 		const TArray<F1DBooleanRow> ItemShape = InventoryIconFragment->Shape;
-	
+
+		// TODO make the root slot a valid slot if that makes, the root slot should be the upmost left valid slot
+		// TODO so if I have an inverse L shape ( __| ), then the root cell would be the single cell at the top right
 		TArray<FIntPoint> OccupiedSlots = FindSlotsFromShape(RootSlot, ItemShape, Rotation);
 
 		for (const FIntPoint& Slot : OccupiedSlots)

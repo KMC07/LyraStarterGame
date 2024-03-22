@@ -65,11 +65,11 @@ public:
 	bool bIgnoreChildInventoryItemCounts = true;
 
 	// if this is not empty, then only items in this array allowed in this inventory
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Inventory)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=InventoryConfig)
 	TSet<TSubclassOf<ULyraInventoryItemDefinition>> AllowedItems;
 
 	// if this is not empty, then items in this array are not allowed in this list
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Inventory)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=InventoryConfig)
 	TSet<TSubclassOf<ULyraInventoryItemDefinition>> DisallowedItems;
 
 	// this is the list of items and the max amount that can be in your inventory (NOTE DO NOT set an item to 0, instead add item to DisallowedItems)
