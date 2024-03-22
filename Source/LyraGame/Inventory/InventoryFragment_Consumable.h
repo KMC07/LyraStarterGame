@@ -22,7 +22,7 @@ class UInventoryFragment_Consumable : public ULyraInventoryItemFragment
 protected:
 
 	// These are the abilities to activate when this item is consumed from the inventory
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<TSubclassOf<ULyraGameplayAbility>> AbilitiesToActivate;
 
 	

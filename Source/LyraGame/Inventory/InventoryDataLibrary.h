@@ -18,7 +18,7 @@ struct F1DBooleanRow
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<bool> BooleanRow;
 
 	bool operator[](int32 i) const
@@ -64,6 +64,7 @@ struct F1DIntegerRow
 	GENERATED_BODY()
 
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<int32> IntegerRow;
 
 	int32 operator[](int32 i) const
@@ -109,7 +110,7 @@ struct FInventoryClumpShape
 
 public:
 	// The shape/layout of the clump as a boolean grid
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<F1DBooleanRow> ClumpGrid;
 };
 
@@ -120,7 +121,7 @@ struct FInventoryClumpIndexMapping
 
 public:
 	// The index mapping of the clump to grid cell indexes
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<F1DIntegerRow> ClumpGrid;
 
 	F1DIntegerRow operator[](int32 i) const

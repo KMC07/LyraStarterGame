@@ -33,10 +33,10 @@ public:
 	float Weight = 1.0f;
 
 	// the shape of the item where each each element is valid slot
-	UPROPERTY(EditAnywhere, Category=Item)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Item)
 	TArray<F1DBooleanRow> Shape;
 
-	UPROPERTY(EditAnywhere, Category=Item)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Item)
 	bool bCanBeDropped = true;
 
 public:
