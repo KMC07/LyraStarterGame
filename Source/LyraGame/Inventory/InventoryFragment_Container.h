@@ -42,7 +42,7 @@ public:
 	// Do not allow this to be empty (as this doesn't make sense in the context of item inventories.
 	// There would be no spatial awareness and no way access the items in this inventory if this value isn't set).
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=InventoryConfig)
-	TArray<FInventoryClumpShape> InventoryGrid;
+	TArray<FInventoryLayoutCreator> InventoryLayout;
 	
 	// these are the itemn the inventory starts with
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=InventoryConfig)

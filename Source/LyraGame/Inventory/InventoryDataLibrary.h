@@ -104,17 +104,6 @@ public:
 };
 
 USTRUCT(BlueprintType)
-struct FInventoryClumpShape
-{
-	GENERATED_BODY()
-
-public:
-	// The shape/layout of the clump as a boolean grid
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TArray<F1DBooleanRow> ClumpGrid;
-};
-
-USTRUCT(BlueprintType)
 struct FInventoryClumpIndexMapping
 {
 	GENERATED_BODY()
@@ -150,6 +139,59 @@ public:
 	}
 
 	void Init(int32 Size, const F1DIntegerRow& Value)
+	{
+		ClumpGrid.Init(Value, Size);
+	}
+	
+	bool IsValidIndex(int32 Index) const
+	{
+		return ClumpGrid.IsValidIndex(Index);
+	}
+};
+
+USTRUCT(BlueprintType)
+struct FInventoryLayoutCreator
+{
+	GENERATED_BODY()
+
+public:
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 ClumpX;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 ClumpY;
+	
+	// The shape/layout of the clump as a boolean grid
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<F1DBooleanRow> ClumpGrid;
+
+	F1DBooleanRow operator[](int32 i) const
+	{
+		return ClumpGrid[i];
+	}
+
+	F1DBooleanRow& operator[](int32 i)
+	{
+		return ClumpGrid[i];
+	}
+
+	void Add(const F1DBooleanRow& Cell)
+	{
+		ClumpGrid.Add(Cell);
+	}
+
+	int32 Num() const
+	{
+		return ClumpGrid.Num();
+	}
+
+	void SetNum(int32 NewNum)
+	{
+		ClumpGrid.SetNum(NewNum);
+	}
+
+	void Init(int32 Size, const F1DBooleanRow& Value)
 	{
 		ClumpGrid.Init(Value, Size);
 	}

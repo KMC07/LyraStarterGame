@@ -277,19 +277,19 @@ void FGridCellInfoList::UpdateCellItemInstance(int32 SlotIndex, ULyraInventoryIt
 	}
 }
 
-void FGridCellInfoList::PopulateInventoryGrid(const TArray<FInventoryClumpShape>& ClumpShapes)
+void FGridCellInfoList::PopulateInventoryGrid(const TArray<FInventoryLayoutCreator>& ClumpLayouts)
 {
 	// Clear existing grid cells and index maps
 	GridCells.Empty();
 	GridCellIndexMap.Empty();
 
 	// Resize the GridCellIndexMap to hold the mappings for each clump
-	GridCellIndexMap.SetNum(ClumpShapes.Num());
+	GridCellIndexMap.SetNum(ClumpLayouts.Num());
 
 	// Iterate through each clump to populate its grid cells and index mapping
-	for (int32 ClumpIndex = 0; ClumpIndex < ClumpShapes.Num(); ++ClumpIndex)
+	for (int32 ClumpIndex = 0; ClumpIndex < ClumpLayouts.Num(); ++ClumpIndex)
 	{
-		const FInventoryClumpShape& ClumpShape = ClumpShapes[ClumpIndex];
+		const FInventoryLayoutCreator& ClumpShape = ClumpLayouts[ClumpIndex];
 		FInventoryClumpIndexMapping& ClumpMapping = GridCellIndexMap[ClumpIndex];
 
 		// Initialize the index mapping for this clump
@@ -383,16 +383,25 @@ ULyraInventoryManagerComponent::ULyraInventoryManagerComponent(const FObjectInit
 	SetIsReplicatedByDefault(true);
 }
 
+void ULyraInventoryManagerComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// populate the inventory if there is a layout
+	if(InventoryLayout.Num() > 0)
+		InventoryGrid.PopulateInventoryGrid(InventoryLayout);
+}
+
 inline void ULyraInventoryManagerComponent::InitialiseInventoryComponent(const FText& InContainerName,
-	const TArray<FInventoryClumpShape>& InInventoryGrid, const TArray<FSpecificItemDefinition>& InStartingItems,
-	float InMaxWeight, bool InIgnoreChildInventoryWeights, int32 InItemCountLimit,
-	bool InIgnoreChildInventoryItemCounts, const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InAllowedItems,
-	const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InDisallowedItems,
-	const TArray<FSpecificItemDefinition>& InSpecificItemCountLimits, bool InIgnoreChildInventoryItemLimits)
+                                                                         const TArray<FInventoryLayoutCreator>& InInventoryLayout, const TArray<FSpecificItemDefinition>& InStartingItems,
+                                                                         float InMaxWeight, bool InIgnoreChildInventoryWeights, int32 InItemCountLimit,
+                                                                         bool InIgnoreChildInventoryItemCounts, const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InAllowedItems,
+                                                                         const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InDisallowedItems,
+                                                                         const TArray<FSpecificItemDefinition>& InSpecificItemCountLimits, bool InIgnoreChildInventoryItemLimits)
 {
 	// initialise the inventory with the proper config
 	ContainerName = InContainerName;
-	InventoryGrid.PopulateInventoryGrid(InInventoryGrid);
+	InventoryLayout = InInventoryLayout;
 	StartingItems = InStartingItems;
 	MaxWeight = InMaxWeight;
 	bIgnoreChildInventoryWeights = InIgnoreChildInventoryWeights;

@@ -17,4 +17,11 @@ class LYRAGAME_API UInventoryUtilityLibrary : public UBlueprintFunctionLibrary
 public:
 	UFUNCTION(BlueprintCallable, Category = "Utilities|Clipboard")
 	static void CopyShapeToClipboard(const TArray<F1DBooleanRow>& Shape);
+
+	UFUNCTION(BlueprintCallable, Category = "Utilities|Clipboard")
+	static void CopyInventoryLayoutToClipboard(const TArray<FInventoryLayoutCreator>& Clumps);
+
+private:
+	static FString ConvertShapeToString(const TArray<F1DBooleanRow>& Shape);
+	
 };

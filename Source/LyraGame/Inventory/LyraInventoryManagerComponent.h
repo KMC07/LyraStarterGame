@@ -211,7 +211,7 @@ public:
 	void UpdateCellRotation(int32 SlotIndex, const EItemRotation& NewRotation);
 	void UpdateCellItemInstance(int32 SlotIndex, ULyraInventoryItemInstance* NewItemInstance);
 
-	void PopulateInventoryGrid(const TArray<FInventoryClumpShape>& ClumpShapes);
+	void PopulateInventoryGrid(const TArray<FInventoryLayoutCreator>& ClumpLayouts);
 	void EmptyGridItems();
 private:
 	//Index mapping functions
@@ -360,6 +360,11 @@ class LYRAGAME_API ULyraInventoryManagerComponent : public UActorComponent
 public:
 	ULyraInventoryManagerComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+protected:
+	virtual void BeginPlay() override;
+
+public:
+	
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
 	int32 CanAddItemDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount = 1);
 
@@ -426,7 +431,7 @@ public:
 
 
 	// Initialiser
-	void InitialiseInventoryComponent(const FText& InContainerName, const TArray<FInventoryClumpShape>& InInventoryGrid,
+	void InitialiseInventoryComponent(const FText& InContainerName, const TArray<FInventoryLayoutCreator>& InInventoryLayout,
 		const TArray<FSpecificItemDefinition>& InStartingItems, float InMaxWeight, bool InIgnoreChildInventoryWeights,
 		int32 InItemCountLimit, bool InIgnoreChildInventoryItemCounts, const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InAllowedItems,
 		const TSet<TSubclassOf<ULyraInventoryItemDefinition>>& InDisallowedItems, const TArray<FSpecificItemDefinition>& InSpecificItemCountLimits,
@@ -482,7 +487,7 @@ protected:
 	
 	// Keep this as empty if there is no spatial awareness in the inventory (think of COD or Fortnite where inventory slot position doesn't matter)
 	UPROPERTY(EditAnywhere, Category=Item)
-	TArray<FInventoryClumpShape> InventoryGridShape;
+	TArray<FInventoryLayoutCreator> InventoryLayout;
 	
 	// these are the itemn the inventory starts with
 	UPROPERTY(EditAnywhere)

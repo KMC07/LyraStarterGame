@@ -79,7 +79,7 @@ ULyraInventoryManagerComponent* UGlobalInventoryManager::CreateNewInventory(
 	// Initialize the new inventory manager component based on the container's static data.
 	NewInventoryManager->InitialiseInventoryComponent(
 		ContainerFragment->ContainerName,
-		ContainerFragment->InventoryGrid,
+		ContainerFragment->InventoryLayout,
 		ContainerFragment->StartingItems,
 		ContainerFragment->MaxWeight,
 		ContainerFragment->bIgnoreChildInventoryWeights,
@@ -90,7 +90,8 @@ ULyraInventoryManagerComponent* UGlobalInventoryManager::CreateNewInventory(
 		ContainerFragment->SpecificItemCountLimits,
 		ContainerFragment->bIgnoreChildInventoryItemLimits
 	);
-
+	NewInventoryManager->RegisterComponent();
+	
 	ContainerInventories.Add(NewInventoryManager);
 	return NewInventoryManager;
 }
