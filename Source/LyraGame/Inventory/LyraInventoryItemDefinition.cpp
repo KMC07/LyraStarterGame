@@ -2,7 +2,6 @@
 
 #include "LyraInventoryItemDefinition.h"
 
-#include "InventoryFragment_Container.h"
 #include "InventoryFragment_InventoryIcon.h"
 #include "InventoryFragment_SetStats.h"
 #include "Templates/SubclassOf.h"
@@ -35,7 +34,6 @@ const T* ULyraInventoryItemDefinition::FindFragmentByClass() const
 	return nullptr;
 }
 template const UInventoryFragment_InventoryIcon* ULyraInventoryItemDefinition::FindFragmentByClass<UInventoryFragment_InventoryIcon>() const;
-template const UInventoryFragment_Container* ULyraInventoryItemDefinition::FindFragmentByClass<UInventoryFragment_Container>() const;
 template const UInventoryFragment_SetStats* ULyraInventoryItemDefinition::FindFragmentByClass<UInventoryFragment_SetStats>() const;
 
 const ULyraInventoryItemFragment* ULyraInventoryItemDefinition::FindFragmentByClass(TSubclassOf<ULyraInventoryItemFragment> FragmentClass) const

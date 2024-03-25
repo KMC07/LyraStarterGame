@@ -45,7 +45,7 @@ void UPickupableStatics::AddPickupToInventory(ULyraInventoryManagerComponent* In
 		{
 			TArray<ULyraInventoryItemInstance*> OutStackedItems;
 			TArray<ULyraInventoryItemInstance*> OutNewItems;
-			int32 RemainingItems = InventoryComponent->AddItem(Template.ItemDef, Template.StackCount, OutStackedItems, OutNewItems);
+			// int32 RemainingItems = InventoryComponent->AddItem(Template.ItemDef, Template.StackCount, OutStackedItems, OutNewItems);
 		}
 
 		// for (const FPickupInstance& Instance : PickupInventory.Instances)
