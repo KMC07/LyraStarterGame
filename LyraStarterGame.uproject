@@ -329,6 +329,10 @@
 		{
 			"Name": "GameplayBehaviors",
 			"Enabled": true
+		},
+		{
+			"Name": "TetrisInventory",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "451731683"

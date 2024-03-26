@@ -27,7 +27,7 @@ public:
 
 // This object is used to store transient data from a fragment
 UCLASS(DefaultToInstanced, Abstract)
-class ULyraInventoryItemFragmentPayload : public UObject
+class LYRAGAME_API ULyraInventoryItemFragmentPayload : public UObject
 {
 	GENERATED_BODY()
 
@@ -50,7 +50,7 @@ public:
  * ULyraInventoryItemDefinition
  */
 UCLASS(Blueprintable, Const, Abstract)
-class ULyraInventoryItemDefinition : public UObject
+class LYRAGAME_API ULyraInventoryItemDefinition : public UObject
 {
 	GENERATED_BODY()
 
@@ -64,9 +64,17 @@ public:
 	TArray<TObjectPtr<ULyraInventoryItemFragment>> Fragments;
 
 public:
-	template<typename T>
-	const T* FindFragmentByClass() const;
 	const ULyraInventoryItemFragment* FindFragmentByClass(TSubclassOf<ULyraInventoryItemFragment> FragmentClass) const;
+
+	template<typename T>
+	const T* FindFragmentByClass() const
+	{
+		static_assert(TIsDerivedFrom<T, ULyraInventoryItemFragment>::Value, "T must be derived from ULyraInventoryItemFragment");
+		return Cast<const T>(FindFragmentByClassInternal(T::StaticClass()));
+	}
+	
+private:
+	const ULyraInventoryItemFragment* FindFragmentByClassInternal(const UClass* FragmentClass) const;
 };
 
 //@TODO: Make into a subsystem instead?

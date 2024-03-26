@@ -25,7 +25,7 @@ enum class ELyraExperienceLoadState
 };
 
 UCLASS()
-class ULyraExperienceManagerComponent final : public UGameStateComponent, public ILoadingProcessInterface
+class LYRAGAME_API ULyraExperienceManagerComponent final : public UGameStateComponent, public ILoadingProcessInterface
 {
 	GENERATED_BODY()
 

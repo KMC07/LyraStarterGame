@@ -37,9 +37,11 @@ public class TetrisInventoryRuntime : ModuleRules
 			new string[]
 			{
 				"CoreUObject",
+				"ApplicationCore",
 				"Engine",
 				"Slate",
 				"SlateCore",
+				"NetCore",
 				"GameplayTags",
 				"GameplayTasks",
 				"GameplayAbilities",

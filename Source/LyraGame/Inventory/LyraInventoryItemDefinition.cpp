@@ -18,25 +18,9 @@ ULyraInventoryItemDefinition::ULyraInventoryItemDefinition(const FObjectInitiali
 	
 }
 
-template<typename T>
-const T* ULyraInventoryItemDefinition::FindFragmentByClass() const
-{
-	static_assert(TIsDerivedFrom<T, ULyraInventoryItemFragment>::Value, "T must be derived from ULyraInventoryItemFragment");
 
-	for (ULyraInventoryItemFragment* Fragment : Fragments)
-	{
-		if (Fragment && Fragment->IsA(T::StaticClass()))
-		{
-			return Cast<T>(Fragment);
-		}
-	}
-
-	return nullptr;
-}
-template const UInventoryFragment_InventoryIcon* ULyraInventoryItemDefinition::FindFragmentByClass<UInventoryFragment_InventoryIcon>() const;
-template const UInventoryFragment_SetStats* ULyraInventoryItemDefinition::FindFragmentByClass<UInventoryFragment_SetStats>() const;
-
-const ULyraInventoryItemFragment* ULyraInventoryItemDefinition::FindFragmentByClass(TSubclassOf<ULyraInventoryItemFragment> FragmentClass) const
+const ULyraInventoryItemFragment* ULyraInventoryItemDefinition::FindFragmentByClass(
+	TSubclassOf<ULyraInventoryItemFragment> FragmentClass) const
 {
 	if (FragmentClass != nullptr)
 	{
@@ -49,6 +33,19 @@ const ULyraInventoryItemFragment* ULyraInventoryItemDefinition::FindFragmentByCl
 		}
 	}
 
+	return nullptr;
+}
+
+const ULyraInventoryItemFragment* ULyraInventoryItemDefinition::FindFragmentByClassInternal(
+	const UClass* FragmentClass) const
+{
+	for (const ULyraInventoryItemFragment* Fragment : Fragments)
+	{
+		if (Fragment && Fragment->GetClass()->IsChildOf(FragmentClass))
+		{
+			return Fragment;
+		}
+	}
 	return nullptr;
 }
 

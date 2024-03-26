@@ -11,7 +11,7 @@ class UObject;
 class USkeletalMesh;
 
 UCLASS()
-class UInventoryFragment_InventoryIcon : public ULyraInventoryItemFragment
+class LYRAGAME_API UInventoryFragment_InventoryIcon : public ULyraInventoryItemFragment
 {
 	GENERATED_BODY()
 

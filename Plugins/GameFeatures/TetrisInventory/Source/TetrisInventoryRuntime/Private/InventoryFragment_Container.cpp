@@ -15,8 +15,7 @@ void UInventoryFragmentPayload_Container::DestroyTransientFragment()
 	if(ChildInventory)
 	{
 		// tell the global manager to delete this inventory
-		UGlobalInventoryManager* InventoryManager = UGlobalInventoryManager::Get(GetWorld());
-		if (InventoryManager)
+		if (UGlobalInventoryManager* InventoryManager = UGlobalInventoryManager::Get(GetWorld()))
 		{
 			InventoryManager->DestroyItemInventory(ChildInventory);
 		}

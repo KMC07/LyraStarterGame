@@ -42,7 +42,5 @@ private:
 	
 	// Function to calculate allowed rotations based on the item's shape
 	TArray<EItemRotation> CalculateAllowedRotations();
-
-	
 	
 };

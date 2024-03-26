@@ -6,6 +6,8 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(InventoryFragment_Tetris)
 
+// create the template for this fragment
+template const UInventoryFragment_Tetris* ULyraInventoryItemDefinition::FindFragmentByClass<UInventoryFragment_Tetris>() const;
 void UInventoryFragment_Tetris::PostLoad()
 {
 	Super::PostLoad();

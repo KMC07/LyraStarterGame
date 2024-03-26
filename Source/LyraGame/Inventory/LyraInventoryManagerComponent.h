@@ -38,7 +38,7 @@ struct FInventoryChangeMessage
 
 /** A single entry in an inventory */
 USTRUCT(BlueprintType)
-struct FInventoryEntry : public FFastArraySerializerItem
+struct LYRAGAME_API FInventoryEntry : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
 
@@ -63,7 +63,7 @@ private:
 
 /** List of inventory items */
 USTRUCT(BlueprintType)
-struct FInventoryList : public FFastArraySerializer
+struct LYRAGAME_API FInventoryList : public FFastArraySerializer
 {
 	GENERATED_BODY()
 

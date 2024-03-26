@@ -19,7 +19,7 @@ struct FGameplayTag;
  * ULyraInventoryItemInstance
  */
 UCLASS(BlueprintType)
-class ULyraInventoryItemInstance : public UObject
+class LYRAGAME_API ULyraInventoryItemInstance : public UObject
 {
 	GENERATED_BODY()
 

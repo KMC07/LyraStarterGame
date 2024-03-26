@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "InventoryUtilityLibrary.h"
+#include "Library/InventoryUtilityLibrary.h"
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
